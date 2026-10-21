@@ -4,6 +4,7 @@
 // @version      0.17
 // @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
 // @author       switchlove
+// @license      MIT
 // @homepageURL  https://github.com/switchlove/OMHP-Toolkit
 // @supportURL   https://github.com/switchlove/OMHP-Toolkit/issues
 // @updateURL    https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js

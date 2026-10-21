@@ -43,3 +43,7 @@ Your layout, sizes, order, colours and HP history are saved in your browser's lo
 ## Notes
 
 This is an unofficial fan-made script and isn't affiliated with One Million HP. It only changes how the page looks on your own screen and reads data the page already has.
+
+## License
+
+[MIT](LICENSE)
