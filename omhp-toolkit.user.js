@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.17
+// @version      0.18
 // @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -9,7 +9,8 @@
 // @supportURL   https://github.com/switchlove/OMHP-Toolkit/issues
 // @updateURL    https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js
 // @downloadURL  https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js
-// @match        https://onemillionhp.com/
+// @match        https://onemillionhp.com/*
+// @match        https://www.onemillionhp.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=onemillionhp.com
 // @grant        none
 // ==/UserScript==

@@ -44,6 +44,12 @@ Your layout, sizes, order, colours and HP history are saved in your browser's lo
 
 This is an unofficial fan-made script and isn't affiliated with One Million HP. It only changes how the page looks on your own screen and reads data the page already has.
 
+## Releasing
+
+1. Raise `@version` in `omhp-toolkit.user.js`. Tampermonkey only updates installs when this number goes up.
+2. Commit and push to `main`.
+3. Tag it: `git tag vX.Y` and `git push --tags`, or `gh release create vX.Y omhp-toolkit.user.js`.
+
 ## License
 
 [MIT](LICENSE)
