@@ -5,7 +5,7 @@ A Tampermonkey userscript for [One Million HP](https://onemillionhp.com/). It ad
 ## Install
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) (or another userscript manager such as Violentmonkey).
-2. Open **[omhp-toolkit.user.js](https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js)**. Tampermonkey will offer to install it.
+2. Open **[omhp-toolkit.user.js](https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js)** and Tampermonkey will offer to install it. You can also install it from **[Greasy Fork](https://greasyfork.org/en/scripts/601490-omhp-toolkit)**.
 3. Reload onemillionhp.com.
 
 Tampermonkey checks this repo for updates on its own when the `@version` number goes up.
