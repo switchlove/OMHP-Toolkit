@@ -14,7 +14,7 @@ body:
     attributes:
       label: Script version
       description: Shown in your userscript manager's dashboard.
-      placeholder: e.g. 0.20
+      placeholder: e.g. 0.24
     validations:
       required: true
   - type: dropdown
@@ -28,6 +28,11 @@ body:
         - Other
     validations:
       required: true
+  - type: input
+    id: others
+    attributes:
+      label: Other userscripts on the site
+      description: Optional. Any other scripts you run on onemillionhp.com, e.g. 1MHP Data Statistics.
   - type: input
     id: browser
     attributes:

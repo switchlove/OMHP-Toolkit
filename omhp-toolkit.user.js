@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.22
-// @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
+// @version      0.24
+// @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
 // @homepageURL  https://github.com/switchlove/OMHP-Toolkit
@@ -20,7 +20,7 @@
 // LAYOUT
 //   - Widens the page to three columns: feed/chat/messages | boss | side panels.
 //     Under 1300px wide the left column drops below everything else.
-//   - Left column: ATTACKS, CHAT, MESSAGES and LOOT sections. Each one collapses,
+//   - Left column: ATTACKS, CHAT, MESSAGES, LOOT and BOSSES sections. Each one collapses,
 //     moves up/down, pops out, and resizes by dragging its bottom edge.
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
@@ -36,25 +36,42 @@
 //
 // BOSS
 //   - An ASCII HP graph next to the boss art, covering the boss's whole life since
-//     you first saw it (kept across reloads). It marks heals, phase changes and
-//     players online, and hovering shows the readout for that moment.
-//   - Under the HP: HP/min, everyone's DMG/min, HP healed, and an estimated kill time.
+//     you first saw it (kept across reloads). It marks heals, phase changes, FOG, players
+//     online and your own damage (those two on a scale at the right); hovering shows the
+//     readout for that moment, and clicking a legend entry hides or shows it.
+//   - Under the HP: HP/min, everyone's DMG/min, HP healed, and an estimated kill time
+//     with a range (what the last 1 and 15 minutes say).
+//   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
+//     peak players online and HP healed.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
 //
 // FIGHT
 //   - YOUR SHARE: your percentage of all the damage on this boss.
 //   - SESSION: your damage today, per hour, best hit, average hit, crit rate. Kept
 //     across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
-//   - FULL IN: time until every attack slot has refilled.
-//   - LOOT: what you found today, counted by rarity (kept like SESSION, with [RESET]).
+//     Hover it for the spread of your last 200 hits.
+//   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
+//     your attacks sat full, recharging nothing.
+//   - LOOT: what you found today, counted by rarity with drops per 100 attacks (kept like
+//     SESSION, with [RESET]; hover for the last 30 days).
 //
 // TOP BAR
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES
 //     to switch parts of this script on or off (applies on reload), the loot alert
-//     rarity, saved LAYOUTs, and EXPORT / IMPORT of everything as a backup file.
+//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, and EXPORT / IMPORT
+//     of everything as a backup file.
 //   - Local time and how long the page has been open.
 //   - The account button shows your badges and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
+//
+// MORE
+//   - Alt shortcuts: Alt+1..9 picks a right-column tab, Alt+P pins, Alt+O pops out,
+//     Alt+T opens [TOOLKIT].
+//   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
+//   - COMPACT (off by default): tighter lines and spacing everywhere.
+//   - [REPLAY] on the HP graph plays the boss's history back from the start.
+//   - STATS THEME: if Zephy's "1MHP Data Statistics" userscript is installed, its panel
+//     takes on this page's theme and highlight colour.
 //
 // ALERTS
 //   - The browser tab's title adds the boss's HP and kill estimate: "(3/5) [72% ~39m] ...".
@@ -70,7 +87,8 @@
         { key: "feed", panel: "panel-feed", title: "ATTACKS", scroller: "#feed" },
         { key: "chat", panel: "panel-chat", title: "CHAT", scroller: "#chat-list" },
         { key: "dms", panel: "panel-dms", title: "MESSAGES", scroller: "#panel-dms" },
-        { key: "loot", panel: "omhp-loot", title: "LOOT", scroller: "#omhp-loot-list" } // built by lootLog()
+        { key: "loot", panel: "omhp-loot", title: "LOOT", scroller: "#omhp-loot-list" }, // built by lootLog()
+        { key: "bosses", panel: "omhp-bosses", title: "BOSSES", scroller: "#omhp-bosses-list" } // built by bossLog()
     ];
     var ORDER_KEY = "omhp.layout.order";
     var THEME_KEY = "omhp.layout.theme";
@@ -219,8 +237,14 @@
         #omhp-graph-plot .heal { color: var(--mythic); }
         #omhp-graph-plot .mark { color: var(--amber); }
         #omhp-graph-plot .online { color: var(--blue); }
+        #omhp-graph-plot .mine { color: var(--green); }
+        #omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
         #omhp-graph { position: relative; }
         #omhp-graph-plot { cursor: crosshair; }
+        /* Legend entries switch their series on and off */
+        #omhp-graph-plot [data-series] { cursor: pointer; }
+        #omhp-graph-plot [data-series]:hover { color: var(--fg); }
+        #omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
         #omhp-graph-cursor {
             position: absolute; width: 1px; background: var(--fg); opacity: .4; pointer-events: none;
         }
@@ -230,7 +254,80 @@
             color: var(--fg); font-size: 11px; line-height: 1.35; letter-spacing: .03em;
         }
         #omhp-graph-cursor[hidden], #omhp-graph-tip[hidden] { display: none; }
+        .omhp-replay { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+        .omhp-replay:hover { color: var(--fg); }
+
+        /* FILTER: hidden and highlighted lines in ATTACKS and CHAT, and the boxes to set them */
+        #feed li.omhp-hide, #chat-list li.omhp-hide { display: none; }
+        #feed li.omhp-mark, #chat-list li.omhp-mark {
+            background: color-mix(in srgb, var(--amber) 12%, transparent); box-shadow: inset 2px 0 var(--amber);
+        }
+        .omhp-filter { display: grid; gap: 4px; margin: 0 0 6px; font-size: 10px; color: var(--dim); letter-spacing: .12em; }
+        .omhp-filter label { display: flex; gap: 6px; align-items: center; }
+        .omhp-filter-in {
+            flex: 1; min-width: 0; padding: 2px 4px; background: var(--bg); color: var(--fg);
+            border: 1px solid var(--faint); font: inherit; font-size: 11px; letter-spacing: 0;
+        }
+        .omhp-filter-in:focus { border-color: var(--dim); outline: none; }
+        .omhp-menu-hint { color: var(--dim); font-size: 10px; letter-spacing: .04em; }
+
+        /* COMPACT: tighter lines and spacing everywhere */
+        html.omhp-compact body { font-size: 13px; }
+        html.omhp-compact .feed li, html.omhp-compact .chat-list li { padding: 0; gap: 6px; }
+        html.omhp-compact .feed .m { line-height: 1.2; }
+        html.omhp-compact .box { padding: 8px; }
+        html.omhp-compact .panel-h { margin-bottom: 4px; }
+        html.omhp-compact .left-section + .left-section { margin-top: 4px; padding-top: 3px; }
+        html.omhp-compact .left-toggle { padding: 0 0 3px; }
         #omhp-session .val { color: var(--fg); }
+
+        /* STATS THEME: Zephy's "1MHP Data Statistics" userscript (#omhp-tracker), when it's
+           installed, drawn in this page's theme and highlight colour instead of fixed amber */
+        html.omhp-stats-theme #omhp-tracker {
+            background: var(--bg); color: var(--fg); border-color: var(--dim); font-family: var(--font, monospace);
+        }
+        html.omhp-stats-theme #omhp-tracker-head {
+            background: var(--bg-2); border-bottom-color: var(--faint); color: var(--amber); letter-spacing: .1em;
+        }
+        html.omhp-stats-theme #omhp-tracker-head:hover { background: var(--bg); }
+        html.omhp-stats-theme #omhp-tracker .omhp-version-badge { color: var(--dim); background: var(--bg); border-color: var(--faint); }
+        html.omhp-stats-theme #omhp-tracker .omhp-tab-bar,
+        html.omhp-stats-theme #omhp-tracker .omhp-actions { border-color: var(--faint); }
+        html.omhp-stats-theme #omhp-tracker .omhp-tab-btn { background: var(--bg-2); border-color: var(--faint); color: var(--dim); }
+        html.omhp-stats-theme #omhp-tracker .omhp-tab-btn:hover { color: var(--fg); }
+        html.omhp-stats-theme #omhp-tracker .omhp-tab-btn.active { background: var(--bg); border-color: var(--amber); color: var(--amber); }
+        html.omhp-stats-theme #omhp-tracker .omhp-table th,
+        html.omhp-stats-theme #omhp-tracker .omhp-table td { border-color: var(--faint); }
+        html.omhp-stats-theme #omhp-tracker .omhp-table th { background: var(--bg-2); color: var(--fg); }
+        html.omhp-stats-theme #omhp-tracker .omhp-cond-header {
+            background: var(--bg-2); border-color: var(--faint); border-left-color: var(--amber); color: var(--fg);
+        }
+        html.omhp-stats-theme #omhp-tracker .omhp-cond-header:hover { background: var(--bg); border-color: var(--dim); border-left-color: var(--amber); }
+        html.omhp-stats-theme #omhp-tracker .omhp-cond-agg { color: var(--dim); }
+        html.omhp-stats-theme #omhp-tracker .omhp-cond-agg b,
+        html.omhp-stats-theme #omhp-tracker .omhp-live-val { color: var(--fg); }
+        html.omhp-stats-theme #omhp-tracker .omhp-toggle-sym { color: var(--amber); }
+        html.omhp-stats-theme #omhp-tracker .omhp-act-btn { background: var(--bg-2); border-color: var(--amber); color: var(--amber); }
+        html.omhp-stats-theme #omhp-tracker .omhp-act-btn:hover { background: var(--amber); color: var(--bg); }
+        html.omhp-stats-theme #omhp-tracker .omhp-live-card { background: var(--bg-2); border-color: var(--faint); }
+        html.omhp-stats-theme #omhp-tracker .omhp-live-card-title { color: var(--dim); border-bottom-color: var(--faint); }
+        html.omhp-stats-theme #omhp-tracker .omhp-live-label { color: var(--dim); }
+        /* Its colours written straight onto elements: values, and the faint "nothing yet" text */
+        html.omhp-stats-theme #omhp-tracker [style*="#ffd45c"] { color: var(--fg) !important; }
+        html.omhp-stats-theme #omhp-tracker [style*="#6d5b38"],
+        html.omhp-stats-theme #omhp-tracker [style*="#665"] { color: var(--dim) !important; }
+        /* Its rarity colours, as the site draws them (without the animations) */
+        html.omhp-stats-theme #omhp-tracker .rar-common { color: #b9b2a0; }
+        html.omhp-stats-theme #omhp-tracker .rar-uncommon { color: var(--green); }
+        html.omhp-stats-theme #omhp-tracker .rar-rare { color: var(--blue); }
+        html.omhp-stats-theme #omhp-tracker .rar-epic { color: #9a7bff; }
+        html.omhp-stats-theme #omhp-tracker .rar-legendary { color: #ff9a1f; }
+        html.omhp-stats-theme #omhp-tracker .rar-mythic { color: #ff3b5c; }
+        html.omhp-stats-theme #omhp-tracker .rar-godly { color: #fff; text-shadow: 0 0 6px #ffd84d; }
+        html.omhp-stats-theme #omhp-tracker .rar-ascended { color: #ff8fd8; text-shadow: none; }
+        html.omhp-stats-theme #omhp-tracker .rar-boss-unique,
+        html.omhp-stats-theme #omhp-tracker .rar-boss_unique,
+        html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0 0 6px #76f5ff; }
 
         /* Left column headers: collapse toggle + reorder arrows */
         .left-head { display: flex; align-items: center; gap: 2px; }
@@ -243,6 +340,7 @@
 
         /* LOOT section */
         .omhp-loot-sum { margin: 0 0 4px; }
+        .omhp-rate { color: var(--faint); font-size: 10px; }
         #omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
 
         /* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */
@@ -373,12 +471,46 @@
         }
     }
 
+    // One clock for the whole script: every(ms, fn) runs fn about every ms. With
+    // { visible: true } it skips while this tab is in the background.
+    var ticks = [];
+
+    function every(ms, fn, opts) {
+        ticks.push({ ms: ms, fn: fn, next: Date.now() + ms, visible: !!(opts && opts.visible) });
+    }
+    setInterval(function() {
+        var now = Date.now();
+        ticks.forEach(function(t) {
+            if (now < t.next) return;
+            t.next = now + t.ms;
+            if (t.visible && document.hidden) return;
+            try { t.fn(); } catch (e) { console.error("OMHP Toolkit:", e); }
+        });
+    }, 1000);
+
+    // One watcher on the tab bar for everything that follows its labels (section badges,
+    // short tab names): onTabsChange(fn) runs fn whenever a tab's text changes
+    var tabWatchers = null;
+
+    function onTabsChange(fn) {
+        var tabs = document.getElementById("tabs");
+        if (!tabs) return;
+        if (!tabWatchers) {
+            tabWatchers = [];
+            new MutationObserver(function() {
+                tabWatchers.forEach(function(f) { f(); });
+            }).observe(tabs, { childList: true, characterData: true, subtree: true });
+        }
+        tabWatchers.push(fn);
+    }
+
     // Features you can switch on/off in [TOOLKIT]: [key, label, on by default?]
     var FEATURES_KEY = "omhp.layout.features";
     var FEATURES = [
         ["graph", "HP GRAPH", true], ["eta", "ETA", true], ["share", "SHARE", true], ["session", "SESSION", true],
         ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
-        ["account", "NAME", true], ["title", "TAB TITLE", true], ["notify", "NOTIFY", false]
+        ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
+        ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["notify", "NOTIFY", false]
     ];
     var features = loadSaved(FEATURES_KEY);
 
@@ -388,8 +520,11 @@
         return !f || f[2];
     }
 
-    if (!isOn("loot")) SECTIONS = SECTIONS.filter(function(s) { return s.key !== "loot"; });
+    // LOOT and BOSSES are features you can switch off; the site's own sections always stay
+    SECTIONS = SECTIONS.filter(function(s) { return isOn(s.key); });
     if (isOn("flattabs")) document.documentElement.classList.add("omhp-flattabs");
+    if (isOn("compact")) document.documentElement.classList.add("omhp-compact");
+    if (isOn("stats")) document.documentElement.classList.add("omhp-stats-theme");
 
     function applyAccent(hex) {
         if (hex) document.documentElement.style.setProperty("--amber", hex);
@@ -508,7 +643,16 @@
 
     // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
     function isOurKey(k) {
-        return k.indexOf("omhp.layout.") === 0 || ["omhp.session", "omhp.loot", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+        return k.indexOf("omhp.layout.") === 0 ||
+            ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+    }
+
+    // Your attacks today, from the stored SESSION (see sessionStats), or 0
+    function hitsToday() {
+        var st = loadSaved("omhp.session");
+        if (st.v !== 2 || st.day !== today()) return 0;
+        var t = myTotals() || st.last;
+        return (t && st.base ? t.hits - st.base.hits : 0) + ((st.extra && st.extra.hits) || 0);
     }
 
     // An earlier day's SESSION or LOOT totals, kept for 30 days (the DAYS table)
@@ -533,7 +677,7 @@
         save(LEADER_KEY, { id: TAB_ID, t: Date.now() });
         return true;
     }
-    setInterval(isLeader, 5000);
+    every(5000, isLeader);
     window.addEventListener("pagehide", function() {
         var l = loadJSON(LEADER_KEY, null);
         if (l && l.id === TAB_ID) {
@@ -688,6 +832,26 @@
             });
             head.appendChild(b);
         });
+        // FILTER (see lineFilters): opens the hide / highlight boxes under the header
+        if (filterEditor && (info.key === "feed" || info.key === "chat")) {
+            var fb = document.createElement("button");
+            fb.type = "button";
+            fb.className = "left-move";
+            fb.textContent = "FILTER";
+            fb.title = "hide or highlight lines in ATTACKS and CHAT";
+            var editor = null;
+            fb.addEventListener("click", function() {
+                if (editor) {
+                    editor.remove();
+                    editor = null;
+                    return;
+                }
+                editor = filterEditor();
+                head.insertAdjacentElement("afterend", editor);
+                editor.querySelector("input").focus();
+            });
+            head.appendChild(fb);
+        }
         var pop = document.createElement("button");
         pop.type = "button";
         pop.className = "left-move";
@@ -718,8 +882,7 @@
             paint();
         });
 
-        var btn = tabButton(info.key);
-        if (btn) new MutationObserver(paint).observe(btn, { childList: true, characterData: true, subtree: true });
+        onTabsChange(paint);
 
         section.appendChild(head);
         section.appendChild(panel);
@@ -798,7 +961,7 @@
                         const b = store.state.boss;
                         if (!out || !b) return;
                         out.dataset.boss = JSON.stringify({
-                            seq: b.seq, hp: b.hp, max: b.max_hp, phase: b.phase,
+                            seq: b.seq, name: b.name, hp: b.hp, max: b.max_hp, phase: b.phase,
                             dmg: b.total_damage, alive: b.status === "alive"
                         });
                     };
@@ -967,7 +1130,9 @@
         line.className = "phase dim";
         phase.insertAdjacentElement("afterend", line);
 
-        var RATE_MS = 5 * 60 * 1000;
+        // The estimate uses the last 5 minutes; the range shows what the last 1 and 15 say
+        var RATE_MS = 15 * 60 * 1000;
+        var WINDOWS = [1, 5, 15];
         var samples = [];
         var bossNum = null;
 
@@ -994,13 +1159,22 @@
             samples.push({ t: now, hp: hp, dmg: typeof b.dmg === "number" ? b.dmg : null });
             while (samples.length && now - samples[0].t > RATE_MS) samples.shift();
 
-            var first = samples[0];
-            var minutes = (now - first.t) / 60000;
-            if (minutes < 0.5) {
+            // HP lost per minute over the last `mins` minutes (or as long as we've watched)
+            function rateOver(mins) {
+                var from = samples[0];
+                for (var i = samples.length - 1; i >= 0; i--) {
+                    if (now - samples[i].t > mins * 60000) break;
+                    from = samples[i];
+                }
+                var m = (now - from.t) / 60000;
+                return m >= 0.5 ? { perMin: (from.hp - hp) / m, first: from, minutes: m } : null;
+            }
+            var main = rateOver(5);
+            if (!main) {
                 line.textContent = "MEASURING…";
                 return;
             }
-            var perMin = (first.hp - hp) / minutes;
+            var first = main.first, minutes = main.minutes, perMin = main.perMin;
             // Everyone's damage per minute, before heals (the boss's total-damage counter)
             var last = samples[samples.length - 1];
             var dmgPerMin = first.dmg !== null && last.dmg !== null && last.dmg >= first.dmg
@@ -1014,11 +1188,17 @@
                 return;
             }
             etaShort = "~" + dur(hp / perMin);
-            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort;
+            // The spread of the other windows' estimates, when it says something
+            var etas = WINDOWS.map(rateOver).filter(function(r) { return r && r.perMin > 0; })
+                .map(function(r) { return hp / r.perMin; });
+            var lo = Math.min.apply(null, etas), hi = Math.max.apply(null, etas);
+            var range = etas.length > 1 && hi - lo >= 2 ? " (" + dur(lo).replace(/m$/, "") + "–" + dur(hi) + ")" : "";
+            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort + range;
+            line.title = "estimate from the last 5 minutes; the range is what the last 1 and 15 minutes say";
         }
 
         sample();
-        setInterval(sample, 5000);
+        every(5000, sample);
     }
 
     // Split the boss area: the ASCII art on the left, an ASCII graph of the boss's HP
@@ -1039,6 +1219,15 @@
         pane.id = "omhp-graph";
         var head = document.createElement("div");
         head.id = "omhp-graph-head";
+        var headText = document.createElement("span");
+        head.appendChild(headText);
+        // [REPLAY]: play the saved history back from the start over 10 seconds
+        var replayBtn = document.createElement("button");
+        replayBtn.type = "button";
+        replayBtn.className = "btn-text omhp-replay";
+        replayBtn.textContent = "[REPLAY]";
+        replayBtn.title = "play this boss's HP history back from the start";
+        head.appendChild(replayBtn);
         var plot = document.createElement("pre");
         plot.id = "omhp-graph-plot";
         pane.appendChild(head);
@@ -1051,14 +1240,51 @@
         // Histories saved before v0.15 may hold fake HP from the FOG event: start them over
         if (store.v !== 2) store = {};
         var boss = store.boss || null;
-        var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online]
+        var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online, your lifetime damage]
+        var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
         var maxHp = null;
 
         var leading = false; // this tab records the history (see isLeader)
 
+        // What the graph shows; click a legend entry to switch it (remembered)
+        var SHOW_KEY = "omhp.layout.graphShow";
+        var show = Object.assign({ fill: true, heal: true, phase: true, online: true, mine: true, fog: true }, loadSaved(SHOW_KEY));
+
         function persist() {
-            if (leading) save(KEY, { v: 2, boss: boss, s: points });
+            if (leading) save(KEY, { v: 2, boss: boss, s: points, f: fog });
         }
+
+        // FOG is on: stretch the current fog span to now, or start a new one
+        function markFog() {
+            var now = Date.now();
+            var last = fog[fog.length - 1];
+            if (last && now - last[1] < 20000) last[1] = now;
+            else fog.push([now, now]);
+            if (fog.length > 200) fog.shift();
+        }
+
+        var replayAt = null, replayTimer = null; // the moment the replay has reached
+
+        function stopReplay() {
+            clearInterval(replayTimer);
+            replayTimer = null;
+            replayAt = null;
+            replayBtn.textContent = "[REPLAY]";
+            draw();
+        }
+
+        replayBtn.addEventListener("click", function() {
+            if (replayTimer) return stopReplay();
+            if (points.length < 2) return;
+            var start = points[0][0], end = Date.now(), began = Date.now();
+            replayBtn.textContent = "[STOP]";
+            replayTimer = setInterval(function() {
+                var k = Math.min(1, (Date.now() - began) / 10000);
+                replayAt = start + (end - start) * k;
+                draw();
+                if (k >= 1) stopReplay();
+            }, 80);
+        });
 
         // Hover readout: a cursor line on the column under the pointer and a small box with
         // the time, HP, phase and players online there
@@ -1082,22 +1308,25 @@
             var pr = plot.getBoundingClientRect(), box = pane.getBoundingClientRect();
             var c = Math.floor((clientX - pr.left) / view.cw) - (view.label + 1);
             var colStart = view.t0 + view.span * c / view.cols;
-            // Nothing past the last real reading (e.g. while FOG has paused the graph)
-            if (c < 0 || c >= view.cols || view.vals[c] === null || colStart > view.lastT) return hideHover();
+            // Nothing past the last real reading, unless it's FOG still going on
+            if (c < 0 || c >= view.cols || view.vals[c] === null || colStart > view.lastT && !view.fogCols[c]) return hideHover();
             var x = pr.left - box.left + (view.label + 1 + c + 0.5) * view.cw;
             cursor.style.left = Math.round(x) + "px";
             cursor.style.top = Math.round(pr.top - box.top) + "px";
             cursor.style.height = Math.round(view.rows * view.lineH) + "px";
             cursor.hidden = false;
 
-            var t = Math.min(view.t0 + view.span * (c + 1) / view.cols, view.lastT);
+            var colEnd = view.t0 + view.span * (c + 1) / view.cols;
+            var t = view.fogCols[c] ? Math.min(colEnd, Date.now()) : Math.min(colEnd, view.lastT);
             var hp = view.vals[c];
             var lines = [
                 new Date(t).toTimeString().slice(0, 5),
-                fmt(hp) + " HP (" + (hp / view.max * 100).toFixed(1) + "%)"
+                fmt(hp) + " HP (" + (hp / view.max * 100).toFixed(1) + "%)" + (view.fogCols[c] ? " last seen" : "")
             ];
             if (view.phases[c]) lines.push("PHASE " + ROMAN[view.phases[c]]);
-            if (view.online[c] !== null) lines.push(view.online[c] + " online");
+            if (view.fogCols[c]) lines.push("FOG: HP hidden");
+            if (show.online && view.online[c] !== null) lines.push(view.online[c] + " online");
+            if (show.mine && view.mine[c]) lines.push("you: " + fmt(view.mine[c]) + " dmg");
             tip.textContent = lines.join("\n");
             tip.hidden = false;
             // Keep the box inside the pane: flip to the cursor's left near the right edge
@@ -1114,11 +1343,24 @@
             hoverX = null;
             hideHover();
         });
+        plot.addEventListener("click", function(e) {
+            var entry = e.target.closest && e.target.closest("[data-series]");
+            if (!entry) return;
+            var k = entry.dataset.series;
+            show[k] = !show[k];
+            save(SHOW_KEY, show);
+            draw();
+        });
 
         function sample() {
-            // FOG hides the boss's HP on purpose: record nothing meanwhile (the line just
-            // carries the last real value across, and the change shows once it clears)
-            if (fogged()) return draw();
+            // FOG hides the boss's HP on purpose: record only that it's on (the line carries
+            // the last real value across, shaded, and the change shows once it clears)
+            if (fogged()) {
+                leading = isLeader();
+                if (leading) markFog();
+                if (!document.hidden) draw();
+                return;
+            }
             var b = trueBoss();
             if (!b) return;
             if (b.max) maxHp = b.max;
@@ -1132,8 +1374,10 @@
             if (num !== boss) {
                 boss = num;
                 points = [];
+                fog = [];
             }
-            points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online"))]);
+            var me = myTotals();
+            points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
             // Long fights: thin out the older half instead of dropping the start
             if (points.length > MAX_POINTS) {
                 var half = Math.floor(points.length / 2);
@@ -1170,9 +1414,13 @@
             // As tall as the art beside it, less the heading and the time axis
             var rows = Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - head.offsetHeight - 3 * lineH) / lineH)));
             var LABEL = 5;
-            var cols = Math.max(10, Math.floor(pane.clientWidth / cw) - LABEL - 1);
+            // A right-hand axis for the players-online (*) and your-damage (+) scales, when
+            // there's any of either: "|" then up to 4 characters for each
+            var hasRight = points.some(function(p) { return show.online && p[3] != null || show.mine && p[4] != null; });
+            var RIGHT = hasRight ? 10 : 0;
+            var cols = Math.max(10, Math.floor(pane.clientWidth / cw) - LABEL - 1 - RIGHT);
             if (points.length < 2) {
-                head.textContent = "HP · COLLECTING…";
+                headText.textContent = "HP · COLLECTING…";
                 plot.textContent = "";
                 view = null;
                 hideHover();
@@ -1181,27 +1429,51 @@
 
             var t0 = points[0][0], t1 = Date.now();
             var span = Math.max(1, t1 - t0);
+            // During [REPLAY], nothing after the moment it has reached
+            var cutoff = replayAt === null ? Infinity : replayAt;
             // Last reading in each column; gaps carry the previous value forward
-            var vals = [], phases = [], online = [];
-            var j = 0, last = null, lastPhase = null, lastOnline = null;
+            var vals = [], phases = [], online = [], mine = [];
+            var j = 0, last = null, lastPhase = null, lastOnline = null, lastMine = null, prevMine = null;
             for (var c = 0; c < cols; c++) {
+                if (t0 + span * c / cols > cutoff) {
+                    vals.push(null);
+                    phases.push(null);
+                    online.push(null);
+                    mine.push(null);
+                    continue;
+                }
                 var end = t0 + span * (c + 1) / cols;
                 while (j < points.length && points[j][0] <= end) {
                     last = points[j][1];
                     if (points[j][2]) lastPhase = points[j][2];
                     if (points[j][3] != null) lastOnline = points[j][3];
+                    if (points[j][4] != null) lastMine = points[j][4];
                     j++;
                 }
                 vals.push(last);
                 phases.push(lastPhase);
                 online.push(lastOnline);
+                // Your damage within this column (your lifetime total's rise across it)
+                mine.push(lastMine !== null && prevMine !== null && lastMine >= prevMine ? lastMine - prevMine : null);
+                prevMine = lastMine;
             }
+            var maxMine = Math.max.apply(null, mine.filter(function(n) { return n; }).concat([0]));
             var maxOnline = Math.max.apply(null, online.filter(function(n) { return n !== null; }).concat([0]));
+            // Columns that overlap a FOG span
+            var fogCols = [];
+            for (var fc = 0; fc < cols; fc++) {
+                var cs = t0 + span * fc / cols, ce = t0 + span * (fc + 1) / cols;
+                fogCols.push(cs <= cutoff && fog.some(function(f) { return f[0] <= ce && f[1] >= cs; }));
+            }
+            // Whether there's anything to switch, before switching it off
+            var hasOnline = maxOnline > 0, hasMine = maxMine > 0, hasFog = fogCols.indexOf(true) !== -1;
+            if (!show.online) maxOnline = 0;
+            if (!show.mine) maxMine = 0;
             // A column higher than the one before it is a heal; a new phase gets a marker
             var heal = [], mark = [];
             for (var c1 = 0; c1 < cols; c1++) {
-                heal.push(c1 > 0 && vals[c1] !== null && vals[c1 - 1] !== null && vals[c1] > vals[c1 - 1]);
-                mark.push(c1 > 0 && phases[c1] && phases[c1 - 1] && phases[c1] !== phases[c1 - 1] ? phases[c1] : 0);
+                heal.push(show.heal && c1 > 0 && vals[c1] !== null && vals[c1 - 1] !== null && vals[c1] > vals[c1 - 1]);
+                mark.push(show.phase && c1 > 0 && phases[c1] && phases[c1 - 1] && phases[c1] !== phases[c1 - 1] ? phases[c1] : 0);
             }
             // The new phase's numeral reads across the top row, starting at its marker
             var topText = {};
@@ -1212,7 +1484,8 @@
 
             // Plain ASCII, like the site's own HP graph, so every character is in its font:
             // the line sits low/middle/high in its row as ' - .  with a dotted fill below,
-            // | for drops (and heals) taller than a row, ^ for a heal, : for a phase change.
+            // | for drops (and heals) taller than a row, ^ for a heal, : for a phase change,
+            // ~ where FOG hid the HP.
             var grid = [];
             for (var gr = 0; gr < rows; gr++) {
                 var row = [];
@@ -1230,14 +1503,21 @@
                 var y = Math.round(exact);
                 var frac = exact - Math.floor(exact);
                 var lineCls = heal[c2] ? "heal" : "line";
-                for (var fr = 0; fr < y; fr++) grid[fr][c2] = { ch: ".", cls: "fill" };
+                if (show.fill) for (var fr = 0; fr < y; fr++) grid[fr][c2] = { ch: ".", cls: "fill" };
                 var from = prevY === null ? y : prevY;
                 for (var vr = Math.min(y, from) + 1; vr < Math.max(y, from); vr++) grid[vr][c2] = { ch: "|", cls: lineCls };
                 grid[y][c2] = { ch: heal[c2] ? "^" : Math.abs(exact - y) < 0.17 ? "-" : frac < 0.5 ? "'" : ".", cls: lineCls };
-                if (mark[c2]) {
-                    for (var mr = y + 1; mr < rows; mr++) if (grid[mr][c2].ch === " ") grid[mr][c2] = { ch: ":", cls: "mark" };
-                }
                 prevY = y;
+            }
+            // FOG: ~ over the empty space and the dotted fill of the columns it covered
+            var isLine = function(cell) { return cell.cls === "line" || cell.cls === "heal"; };
+            if (show.fog) {
+                for (var gx = 0; gx < cols; gx++) {
+                    if (!fogCols[gx]) continue;
+                    for (var gy = 0; gy < rows; gy++) {
+                        if (grid[gy][gx].cls === null || grid[gy][gx].cls === "fill") grid[gy][gx] = { ch: "~", cls: "fog" };
+                    }
+                }
             }
             // Players online, on its own 0..peak scale: * over the empty space and the dotted fill
             if (maxOnline > 0) {
@@ -1245,15 +1525,45 @@
                     if (online[oc] === null) continue;
                     var oy = Math.round(online[oc] / maxOnline * (rows - 1));
                     var under = grid[oy][oc];
-                    if (under.cls === null || under.cls === "fill" || under.cls === "mark") grid[oy][oc] = { ch: "*", cls: "online" };
+                    if (!isLine(under)) grid[oy][oc] = { ch: "*", cls: "online" };
                 }
+            }
+            // Your damage, on its own 0..peak scale: + over the empty space and the dotted fill
+            if (maxMine > 0) {
+                for (var yc = 0; yc < cols; yc++) {
+                    if (!mine[yc]) continue;
+                    var yy = Math.round(mine[yc] / maxMine * (rows - 1));
+                    var below = grid[yy][yc];
+                    if (!isLine(below) && below.cls !== "online") grid[yy][yc] = { ch: "+", cls: "mine" };
+                }
+            }
+            // Phase changes go on top of everything but the HP line: a : column, and the new
+            // phase's numeral across the top row
+            for (var mc = 0; mc < cols; mc++) {
+                if (!mark[mc]) continue;
+                for (var mr = 0; mr < rows; mr++) if (!isLine(grid[mr][mc])) grid[mr][mc] = { ch: ":", cls: "mark" };
             }
             Object.keys(topText).forEach(function(k) {
                 var cell = grid[rows - 1][k];
-                if (cell && (cell.ch === " " || cell.cls === "mark")) grid[rows - 1][k] = { ch: topText[k], cls: "mark" };
+                if (cell && !isLine(cell)) grid[rows - 1][k] = { ch: topText[k], cls: "mark" };
             });
 
             var frag = document.createDocumentFragment();
+            // Right axis, on the top, middle and bottom rows: players online, then your damage
+            // per column (both on their own 0..peak scales, like the marks they label)
+            function rightLabel(r) {
+                var share = r === rows - 1 ? 1 : r === Math.round((rows - 1) / 2) ? 0.5 : r === 0 ? 0 : null;
+                frag.appendChild(document.createTextNode("|"));
+                [["online", maxOnline, String], ["mine", maxMine, short]].forEach(function(axis, i) {
+                    var text = axis[1] > 0 && share !== null ? axis[2](Math.round(axis[1] * share)) : "";
+                    text = (i ? " " : "") + text.padStart(4);
+                    if (!text.trim()) return frag.appendChild(document.createTextNode(text));
+                    var sp = document.createElement("span");
+                    sp.className = axis[0];
+                    sp.textContent = text;
+                    frag.appendChild(sp);
+                });
+            }
             for (var r = rows - 1; r >= 0; r--) {
                 var label = "";
                 if (r === rows - 1) label = short(max);
@@ -1281,37 +1591,54 @@
                     runText += cell2.ch;
                 }
                 flush();
+                if (RIGHT) rightLabel(r);
                 frag.appendChild(document.createTextNode("\n"));
             }
-            frag.appendChild(document.createTextNode(" ".repeat(LABEL) + "+" + "-".repeat(cols) + "\n"));
+            frag.appendChild(document.createTextNode(" ".repeat(LABEL) + "+" + "-".repeat(cols) + (RIGHT ? "+" : "") + "\n"));
             var left = "-" + ago(span), right = "now";
             frag.appendChild(document.createTextNode(" ".repeat(LABEL + 1) + left +
                 " ".repeat(Math.max(1, cols - left.length - right.length)) + right + "\n"));
-            // Legend
+            // Legend: [series it switches (or null), colour class, mark, label]. Click an entry
+            // to hide or show that series.
             frag.appendChild(document.createTextNode(" ".repeat(LABEL + 1)));
-            [["line", "-"], [null, "hp  "], ["heal", "^"], [null, "heal  "], ["mark", ":"], [null, "phase"]].concat(maxOnline > 0 ? [[null, "  "], ["online", "*"], [null, "online " + maxOnline]] : []).forEach(function(part) {
-                if (!part[0]) return frag.appendChild(document.createTextNode(part[1]));
-                var sp = document.createElement("span");
-                sp.className = part[0];
-                sp.textContent = part[1];
-                frag.appendChild(sp);
-            });
+            [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"], ["heal", "heal", "^", "heal"], ["phase", "mark", ":", "phase"]]
+                .concat(hasOnline ? [["online", "online", "*", "online"]] : [])
+                .concat(hasMine ? [["mine", "mine", "+", "your dmg"]] : [])
+                .concat(hasFog ? [["fog", "fog", "~", "fog"]] : [])
+                .forEach(function(item, i) {
+                    if (i) frag.appendChild(document.createTextNode("  "));
+                    var entry = document.createElement("span");
+                    var on = !item[0] || show[item[0]];
+                    if (item[0]) {
+                        entry.dataset.series = item[0];
+                        entry.title = (on ? "hide " : "show ") + item[3] +
+                            (item[0] === "online" || item[0] === "mine" ? " (scale on the right)" : "");
+                        if (!on) entry.className = "omhp-legend-off";
+                    }
+                    var mark = document.createElement("span");
+                    if (on) mark.className = item[1];
+                    mark.textContent = item[2];
+                    entry.appendChild(mark);
+                    entry.appendChild(document.createTextNode(" " + item[3]));
+                    frag.appendChild(entry);
+                });
             plot.replaceChildren(frag);
             // What this render shows, for the hover readout
             view = {
                 t0: t0, span: span, cols: cols, label: LABEL, rows: rows, cw: cw, lineH: lineH, max: max,
-                vals: vals, phases: phases, online: online, lastT: points[points.length - 1][0]
+                vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols, lastT: Math.min(cutoff, points[points.length - 1][0])
             };
             if (hoverX !== null) showHover(hoverX);
 
             var since = new Date(t0).toTimeString().slice(0, 5);
-            head.textContent = fogged() ? "HP · FOG — PAUSED" : "HP SINCE " + since + " · " + ago(span);
+            headText.textContent = replayAt !== null ? "REPLAY · " + new Date(replayAt).toTimeString().slice(0, 5) + " · " + ago(replayAt - t0) + " in"
+                : fogged() ? "HP · FOG — PAUSED" : "HP SINCE " + since + " · " + ago(span);
             head.title = "boss #" + boss + "'s HP since you first saw it";
         }
 
         sample();
-        setInterval(sample, 5000);
-        setInterval(persist, 15000);
+        every(5000, sample);
+        every(15000, persist);
         window.addEventListener("pagehide", persist);
         window.addEventListener("storage", function(e) {
             if (e.key !== KEY || leading) return;
@@ -1319,6 +1646,7 @@
             if (saved.v !== 2) return;
             boss = saved.boss || null;
             points = Array.isArray(saved.s) ? saved.s : [];
+            fog = Array.isArray(saved.f) ? saved.f : [];
             if (!document.hidden) draw();
         });
         new ResizeObserver(function() {
@@ -1376,7 +1704,7 @@
         // base: the totals at the first reading today; last: the latest reading; extra: what
         // was counted from the screen while the site's data wasn't available
         function fresh() {
-            return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0 };
+            return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0, sizes: [] };
         }
 
         function counts(s, t) {
@@ -1459,6 +1787,16 @@
             }
             parts.push(daysBtn, reset);
             line.replaceChildren.apply(line, parts);
+            line.title = spread(s.sizes || []);
+        }
+
+        // SESSION's tooltip: the size of your last (up to 200) hits, smallest to biggest
+        function spread(sizes) {
+            if (sizes.length < 5) return "";
+            var x = sizes.slice().sort(function(a, b) { return a - b; });
+            var at = function(q) { return fmt(x[Math.min(x.length - 1, Math.floor(q * x.length))]); };
+            return "your last " + x.length + " hits\nsmallest " + fmt(x[0]) + "\nmedian " + at(0.5) +
+                "\n9 in 10 under " + at(0.9) + "\nbiggest " + fmt(x[x.length - 1]);
         }
 
         // The DAYS table: one line per earlier day, newest first
@@ -1469,7 +1807,7 @@
                 daysBox.textContent = "no earlier days yet";
                 return;
             }
-            var lines = ["DAY      DMG    /HR  HITS CRIT  LOOT"];
+            var lines = ["DAY      DMG    /HR  HITS CRIT  IDLE  LOOT"];
             dates.forEach(function(d) {
                 var x = all[d].session || {}, l = (all[d].loot || {}).counts || {};
                 var hrs = (x.activeMs || 0) / 3600000;
@@ -1477,7 +1815,8 @@
                 lines.push(d.slice(5) + "  " + short(x.dmg || 0).padStart(6) + " " +
                     (hrs >= 1 / 60 ? short(Math.round((x.dmg || 0) / hrs)) : "-").padStart(6) + " " +
                     String(x.hits || 0).padStart(5) + " " +
-                    (x.hits ? Math.round(x.crits / x.hits * 100) + "%" : "-").padStart(4) + "  " + loot);
+                    (x.hits ? Math.round(x.crits / x.hits * 100) + "%" : "-").padStart(4) + " " +
+                    (all[d].idle ? dur(all[d].idle.ms / 60000) : "-").padStart(5) + "  " + loot);
             });
             daysBox.textContent = lines.join("\n");
         }
@@ -1519,24 +1858,30 @@
             });
         }
 
+        // YOUR LAST HIT is only drawn by the tab that attacked, so each tab records its own hits
         function readHit() {
             var n = numberIn(lastHit);
-            if (n !== null && n > load().best) {
-                update(function(s) { s.best = Math.max(s.best, n); });
-            }
+            if (n === null) return;
+            update(function(s) {
+                s.best = Math.max(s.best, n);
+                s.sizes = (s.sizes || []).concat([n]).slice(-200);
+            });
         }
 
         new MutationObserver(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
         var bridge = document.getElementById("omhp-boss-data");
         if (bridge) new MutationObserver(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
-        if (lastHit) new MutationObserver(readHit).observe(lastHit, { childList: true, characterData: true, subtree: true });
+        if (lastHit) new MutationObserver(function() { if (hitSeen) readHit(); }).observe(lastHit, { childList: true, characterData: true, subtree: true });
+        // Only hits from now on: the one on screen at load was recorded by an earlier page
+        var hitSeen = false;
+        setTimeout(function() { hitSeen = true; }, 3000);
         // Another tab saved: show its numbers
         window.addEventListener("storage", function(e) {
             if (e.key === KEY) paint();
             if (e.key === DAYS_KEY && !daysBox.hidden) paintDays();
         });
-        setInterval(readDamage, 10000);
-        setInterval(tickActive, 10000);
+        every(10000, readDamage);
+        every(10000, tickActive);
         window.addEventListener("pagehide", tickActive);
         readDamage();
         // The hit already on screen at load was counted by an earlier page (or isn't today's)
@@ -1658,6 +2003,16 @@
         }
         paintLootMin();
         row("LOOT ALERT", [lootMin]);
+        if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
+
+        // Other userscripts this one knows, checked each time the menu opens
+        var addons = el("span", "omhp-menu-hint");
+        row("ADD-ONS", [addons]);
+        function paintAddons() {
+            addons.textContent = document.getElementById("omhp-tracker")
+                ? "1MHP Data Statistics found · " + (isOn("stats") ? "in this theme" : "own colours (STATS THEME off)")
+                : "none found (1MHP Data Statistics gets this theme when installed)";
+        }
 
         // Layouts: the built-in ones, your saved ones (× deletes), + SAVE
         var BUILT_IN = { "DEFAULT": {}, "BOSS FOCUS": {} };
@@ -1760,6 +2115,7 @@
         btn.addEventListener("click", function(e) {
             e.stopPropagation();
             pop.hidden = !pop.hidden;
+            if (!pop.hidden) paintAddons();
         });
         document.addEventListener("click", function(e) {
             if (!wrap.contains(e.target)) pop.hidden = true;
@@ -1793,23 +2149,49 @@
             return m ? Number(m[1]) : null;
         }
 
+        // How long your attacks sat full today (recharging nothing). With several tabs
+        // open, only the leader counts it.
+        var IDLE_KEY = "omhp.idle";
+        var lastTick = Date.now();
+        function idle(full) {
+            var st = loadSaved(IDLE_KEY);
+            if (st.day !== today()) {
+                if (st.day && st.ms >= 60000) archiveDay(st.day, "idle", { ms: st.ms });
+                st = { day: today(), ms: 0 };
+            }
+            var now = Date.now();
+            if (full && isLeader()) {
+                st.ms += Math.min(90000, now - lastTick); // not across sleep
+                save(IDLE_KEY, st);
+            }
+            lastTick = now;
+            return st.ms >= 60000 ? " · IDLE " + dur(st.ms / 60000) + " TODAY" : "";
+        }
+
         function tick() {
             var key = (pips.dataset.key || "").split("/"); // "left/per", set by the site
             var left = Number(key[0]), per = Number(key[1]);
             var next = (resetIn.textContent || "").match(/(\d+):(\d\d)/);
             var every = rechargeSeconds();
-            if (!per || isNaN(left) || left >= per || !next || !every) {
+            var full = per > 0 && left >= per;
+            var wasted = idle(full);
+            if (full) {
+                line.textContent = "FULL" + wasted;
+                line.title = "time today your attacks sat full, recharging nothing";
+                return;
+            }
+            if (!per || isNaN(left) || !next || !every) {
                 line.textContent = "";
                 return;
             }
             var secs = Number(next[1]) * 60 + Number(next[2]) + (per - left - 1) * every;
             var h = Math.floor(secs / 3600), m = Math.floor(secs % 3600 / 60), s = secs % 60;
             // A clock-style countdown ("1:05:09", "42:09"), unlike dur()'s "1h 05m"
-            line.textContent = "FULL IN " + (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
+            line.textContent = "FULL IN " + (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0") + wasted;
         }
 
         tick();
-        setInterval(tick, 1000);
+        every(1000, tick);
     }
 
     // LOOT section for the left column: what you found today, by rarity (kept across
@@ -1855,8 +2237,13 @@
             redraw();
         });
 
+        // "RARE x12 1.2%": count today, and drops per 100 attacks today. The tooltip has
+        // the rates over the last 30 days too.
         function paintSummary(st) {
-            var keys = Object.keys(st.counts);
+            var keys = Object.keys(st.counts).sort(function(a, b) {
+                return RARITIES.indexOf(a.slice(2)) - RARITIES.indexOf(b.slice(2));
+            });
+            var hits = hitsToday();
             summary.replaceChildren();
             if (!keys.length) summary.appendChild(document.createTextNode("nothing yet today"));
             keys.forEach(function(k, i) {
@@ -1865,8 +2252,42 @@
                 s.className = k;
                 s.textContent = st.counts[k][1] + " x" + st.counts[k][0];
                 summary.appendChild(s);
+                if (hits > 0) {
+                    var r = document.createElement("span");
+                    r.className = "omhp-rate";
+                    r.textContent = " " + rate(st.counts[k][0], hits);
+                    summary.appendChild(r);
+                }
             });
             if (keys.length) summary.appendChild(reset);
+            summary.title = ratesTitle(st, hits);
+        }
+
+        // Drops per 100 attacks: 3 in 250 -> "1.2%"
+        function rate(n, hits) {
+            var pct = n / hits * 100;
+            return (pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)) + "%";
+        }
+
+        function ratesTitle(st, hits) {
+            var days = loadSaved(DAYS_KEY), all = {}, allHits = hits;
+            Object.keys(st.counts).forEach(function(k) { all[k] = [st.counts[k][0], st.counts[k][1]]; });
+            Object.keys(days).forEach(function(d) {
+                var c = (days[d].loot || {}).counts || {};
+                allHits += (days[d].session || {}).hits || 0;
+                Object.keys(c).forEach(function(k) {
+                    all[k] = all[k] || [0, c[k][1]];
+                    all[k][0] += c[k][0];
+                });
+            });
+            var lines = ["drops per 100 attacks"];
+            if (hits) lines.push("today (" + fmt(hits) + " attacks): " + Object.keys(st.counts).map(function(k) {
+                return st.counts[k][1] + " " + rate(st.counts[k][0], hits);
+            }).join(", "));
+            if (allHits > hits) lines.push("last 30 days (" + fmt(allHits) + " attacks): " + Object.keys(all).map(function(k) {
+                return all[k][1] + " " + rate(all[k][0], allHits);
+            }).join(", "));
+            return lines.length > 1 ? lines.join("\n") : "";
         }
 
         // One list line from its saved data. Rarity text is wrapped in its r-* class so
@@ -1944,8 +2365,95 @@
         window.addEventListener("storage", function(e) {
             if (e.key === KEY) redraw();
         });
+        // The rates move with every attack, not only with loot
+        every(30000, function() { paintSummary(load()); }, { visible: true });
         redraw();
         watch();
+    }
+
+    // BOSSES section for the left column: every boss you've seen, newest first. When a boss
+    // changes, its summary is saved: name, how long you watched it, your damage and share,
+    // the most players online, and HP healed. With several tabs open, the leader records.
+    function bossLog() {
+        var KEY = "omhp.bosses", CUR_KEY = "omhp.bosscur";
+        var MAX = 100;
+        var panel = document.createElement("div");
+        panel.id = "omhp-bosses";
+        panel.className = "panel";
+        var list = document.createElement("ol");
+        list.id = "omhp-bosses-list";
+        list.className = "feed omhp-loot-list";
+        panel.appendChild(list);
+        // Parked out of sight until moveSections() puts it in the left column
+        panel.hidden = true;
+        document.body.appendChild(panel);
+
+        function render(x) {
+            var li = document.createElement("li");
+            var t = document.createElement("span");
+            t.className = "t";
+            t.textContent = new Date(x.end).toTimeString().slice(0, 5);
+            li.appendChild(t);
+            var m = document.createElement("span");
+            m.className = "m";
+            var name = document.createElement("span");
+            name.className = "val";
+            name.textContent = "#" + x.seq + " " + (x.name || "");
+            m.appendChild(name);
+            var bits = [dur((x.end - x.start) / 60000) + (x.killed ? " · KILLED" : " · LEFT")];
+            if (x.mine) bits.push("YOU " + short(x.mine) + (x.all ? " (" + (x.mine / x.all * 100).toFixed(2) + "%)" : ""));
+            if (x.peak) bits.push("PEAK " + x.peak);
+            if (x.healed > 0) bits.push("HEALED " + short(x.healed));
+            m.appendChild(document.createTextNode(" · " + bits.join(" · ")));
+            li.appendChild(m);
+            li.title = new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
+                (x.killed ? "" : "\n(you weren't watching when it ended)");
+            return li;
+        }
+
+        function redraw() {
+            var all = loadJSON(KEY, []);
+            if (!all.length) {
+                var li = document.createElement("li");
+                li.className = "dim";
+                li.textContent = "bosses you see are listed here once they're gone";
+                list.replaceChildren(li);
+            } else list.replaceChildren.apply(list, all.map(render));
+        }
+
+        function sample() {
+            var b = trueBoss();
+            if (!b || !isLeader()) return;
+            var cur = loadJSON(CUR_KEY, null);
+            var now = Date.now();
+            if (cur && cur.seq !== b.seq) {
+                // A new boss: file the last one
+                var all = loadJSON(KEY, []);
+                if (!all.length || all[0].seq !== cur.seq) {
+                    all.unshift(cur);
+                    save(KEY, all.slice(0, MAX));
+                }
+                cur = null;
+                redraw();
+            }
+            if (!cur) cur = { seq: b.seq, name: b.name || "", start: now, end: now, mine: 0, all: 0, peak: 0, healed: 0, killed: false };
+            cur.end = now;
+            if (b.name) cur.name = b.name;
+            var mine = numberIn(document.getElementById("boss-dmg"));
+            if (mine !== null && mine >= cur.mine) cur.mine = mine;
+            if (typeof b.dmg === "number") cur.all = Math.max(cur.all, b.dmg);
+            cur.peak = Math.max(cur.peak, numberIn(document.getElementById("st-online")) || 0);
+            if (typeof b.dmg === "number" && b.max) cur.healed = Math.max(cur.healed, b.dmg - (b.max - b.hp));
+            if (b.alive === false) cur.killed = true;
+            save(CUR_KEY, cur);
+        }
+
+        window.addEventListener("storage", function(e) {
+            if (e.key === KEY) redraw();
+        });
+        redraw();
+        sample();
+        every(5000, sample);
     }
 
     // Set once the saved pin (if any) is back, so pop-out windows restore after it
@@ -2361,11 +2869,11 @@
             if (btn.dataset.short !== t) btn.dataset.short = t;
         }
 
-        tabs.querySelectorAll(".tab-menu [role=tab]").forEach(function(btn) {
-            label(btn);
-            new MutationObserver(function() { label(btn); })
-                .observe(btn, { childList: true, characterData: true, subtree: true });
-        });
+        function labelAll() {
+            tabs.querySelectorAll(".tab-menu [role=tab]").forEach(label);
+        }
+        labelAll();
+        onTabsChange(labelAll);
     }
 
     // Local time and how long the page has been open, in the top bar.
@@ -2384,7 +2892,7 @@
 
         addToBar(bar, span);
         tick();
-        setInterval(tick, 15000);
+        every(15000, tick, { visible: true });
     }
 
     // The browser tab's title: the site leads it with your attacks, "(3/5) ONE MILLION HP";
@@ -2410,7 +2918,7 @@
         var titleEl = document.querySelector("title");
         // The site rewrites the title on every update of your data: add ours back straight away
         if (titleEl) new MutationObserver(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
-        setInterval(paint, 5000);
+        every(5000, paint);
         paint();
     }
 
@@ -2446,8 +2954,89 @@
             last = now;
         }
 
-        setInterval(check, 5000);
+        every(5000, check);
         check();
+    }
+
+    // Alt + key shortcuts (the site's own keys use no modifier, and it ignores Alt):
+    // Alt+1..9 picks a tab in the right column, Alt+P pins, Alt+O pops out, Alt+T opens
+    // [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout.
+    function shortcuts() {
+        document.addEventListener("keydown", function(e) {
+            if (!e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
+            var t = e.target;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            var digit = /^Digit([1-9])$/.exec(e.code);
+            var btn = null;
+            if (digit) {
+                var tabs = Array.prototype.filter.call(document.querySelectorAll("#tabs [role=tab]"), function(b) {
+                    return !b.hidden && LEFT_TABS.indexOf(b.dataset.tab) === -1;
+                });
+                btn = tabs[Number(digit[1]) - 1];
+            } else if (e.code === "KeyP") btn = document.querySelector("#tabs .omhp-pin");
+            else if (e.code === "KeyO") btn = document.querySelector("#tabs .omhp-popout");
+            else if (e.code === "KeyT") btn = document.getElementById("omhp-accent");
+            if (!btn || btn.disabled) return;
+            e.preventDefault();
+            btn.click();
+        });
+    }
+
+    // FILTER on the ATTACKS and CHAT headers: hide lines with any of some words or names,
+    // and highlight lines with others (your name, your clan...). Saved; applies to both.
+    var FILTER_KEY = "omhp.layout.filters";
+    var filterEditor = null; // set by lineFilters(); builds the boxes FILTER opens
+
+    function lineFilters() {
+        var lists = [document.getElementById("feed"), document.getElementById("chat-list")].filter(Boolean);
+        if (!lists.length) return false;
+        var f = Object.assign({ hide: [], mark: [] }, loadSaved(FILTER_KEY));
+
+        function has(words, text) {
+            return words.some(function(w) { return text.indexOf(w) !== -1; });
+        }
+
+        function apply(li) {
+            if (li.nodeType !== 1 || li.tagName !== "LI") return;
+            var text = (li.textContent || "").toLowerCase();
+            li.classList.toggle("omhp-hide", has(f.hide, text));
+            li.classList.toggle("omhp-mark", has(f.mark, text));
+        }
+
+        function applyAll() {
+            lists.forEach(function(l) { Array.prototype.forEach.call(l.children, apply); });
+        }
+
+        lists.forEach(function(l) {
+            new MutationObserver(function(records) {
+                records.forEach(function(r) { r.addedNodes.forEach(apply); });
+            }).observe(l, { childList: true });
+        });
+        applyAll();
+
+        filterEditor = function() {
+            var box = document.createElement("div");
+            box.className = "omhp-filter";
+            [["hide", "HIDE", "lines with any of these words or names are hidden"],
+                ["mark", "MARK", "lines with any of these words or names are highlighted"]].forEach(function(r) {
+                var label = document.createElement("label");
+                label.appendChild(document.createTextNode(r[1]));
+                var input = document.createElement("input");
+                input.type = "text";
+                input.className = "omhp-filter-in";
+                input.placeholder = "words or names, comma-separated";
+                input.title = r[2] + " (in ATTACKS and CHAT)";
+                input.value = f[r[0]].join(", ");
+                input.addEventListener("change", function() {
+                    f[r[0]] = input.value.split(",").map(function(w) { return w.trim().toLowerCase(); }).filter(Boolean);
+                    save(FILTER_KEY, f);
+                    applyAll();
+                });
+                label.appendChild(input);
+                box.appendChild(label);
+            });
+            return box;
+        };
     }
 
     // Features that couldn't start (the site changed) and page-script imports that failed,
@@ -2502,9 +3091,12 @@
         run("flattabs", shortTabs);
         run("title", tabTitle);
         run("notify", notifier);
+        run("keys", shortcuts);
+        run("filters", lineFilters);
         pinPanel();
         floatingPanels();
         run("loot", lootLog);
+        run("bosses", bossLog);
         healthCheck();
         var columns = document.querySelector("#app .columns");
         if (!columns) return;

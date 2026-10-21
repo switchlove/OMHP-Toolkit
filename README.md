@@ -1,6 +1,6 @@
 # OMHP Toolkit
 
-A Tampermonkey userscript for [One Million HP](https://onemillionhp.com/). It adds a wider three-column layout, pop-out panels, a boss HP graph with a kill ETA, session and loot stats, and colour themes.
+A Tampermonkey userscript for [One Million HP](https://onemillionhp.com/). It adds a three-column layout with pinned and pop-out panels, a boss HP graph with a kill ETA and replay, session, loot and boss logs, alerts, chat and feed filters, saved layouts and colour themes. Almost everything can be switched off in its own settings menu, **[TOOLKIT]**.
 
 ## Install
 
@@ -14,7 +14,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ### Layout
 - Three columns: feed/chat/messages | boss | side panels. Under 1300px wide, the left column moves below everything else.
-- Left column with ATTACKS, CHAT, MESSAGES and LOOT sections. Each one collapses, moves up or down, pops out, and resizes by dragging its bottom edge.
+- Left column with ATTACKS, CHAT, MESSAGES, LOOT and BOSSES sections. Each one collapses, moves up or down, pops out, and resizes by dragging its bottom edge.
 - Drag the gaps between columns to resize them. Double-click any drag handle to reset it.
 - The boss column and the right column stay pinned in view while you scroll.
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
@@ -25,15 +25,22 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
 
 ### Boss
-- An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes and players online, and hovering shows the values for that moment.
-- HP/min, everyone's DMG/min, HP healed and an estimated kill time.
+- An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes, players online (`*`) and your own damage (`+`), with a scale on the right for those two, and hovering shows the values for that moment. Phase changes are drawn on top of everything but the HP line, and FOG periods are shaded with `~`. Click an entry in the legend under it to hide or show that part (fill, heals, phases, online, your damage, fog). **[REPLAY]** plays the boss's history back from the start over 10 seconds.
+- HP/min, everyone's DMG/min, HP healed and an estimated kill time from the last 5 minutes, with a range from what the last 1 and 15 minutes say, e.g. `DOWN IN ~39m (31–52m)`.
+- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed.
 - During the FOG event it uses the site's real data and never records the fake HP.
 
 ### Fight
 - **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**: your damage today, damage per hour (counting only the time the game was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate and loot.
-- **FULL IN**: time until every attack slot has refilled.
-- **LOOT**: what you found today, counted by rarity. Like SESSION, it carries over when you reload and has its own **[RESET]**.
+- **SESSION**: your damage today, damage per hour (counting only the time the game was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time and loot. Hover the SESSION line for the spread of your last 200 hits (smallest, median, 9 in 10, biggest).
+- **FULL IN**: time until every attack slot has refilled. **IDLE** adds up how long today your attacks sat full, recharging nothing.
+- **LOOT**: what you found today, counted by rarity, with drops per 100 attacks (hover for the last 30 days). Like SESSION, it carries over when you reload and has its own **[RESET]**.
+
+### Shortcuts and filters
+- **Alt+1…9** picks a tab in the right column, **Alt+P** pins or unpins, **Alt+O** pops it out and **Alt+T** opens [TOOLKIT]. The site's own keys (attack, U, S, 1–3) are untouched.
+- **FILTER** on the ATTACKS and CHAT headers: hide lines with any of some words or names, and highlight lines with others (your name, your clan…).
+- **COMPACT** (off by default, in FEATURES): tighter lines and spacing everywhere.
+- **STATS THEME**: if Zephy's [1MHP Data Statistics](https://gist.github.com/Zephy-fm/7eab1928aee90a961d28b206a4acccd1) userscript is installed, its panel takes on the toolkit's theme, highlight colour and the site's rarity colours. [TOOLKIT] → ADD-ONS shows whether it was found.
 
 ### Alerts
 - The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG]` during FOG.
@@ -42,8 +49,10 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 ### Top bar
 - **[TOOLKIT]**: the toolkit's settings menu.
   - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
-  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title or notifications on or off. Changes apply after a reload.
+  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme or notifications on or off. Changes apply after a reload.
   - **LOOT ALERT**: the lowest rarity that gets a notification.
+  - **KEYS**: a reminder of the Alt shortcuts.
+  - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
   - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
   - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
 - **⚠ N OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which.
@@ -54,13 +63,14 @@ Your layout, sizes, order, colours, feature choices, HP history, session and loo
 
 ## Notes
 
-This is an unofficial fan-made script and isn't affiliated with One Million HP. It only changes how the page looks on your own screen and reads data the page already has.
+This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are the ones the site makes itself when you open RANKS or HISTORY, repeated while those panels are on screen. Everything it keeps stays in your browser.
 
 ## Releasing
 
-1. Raise `@version` in `omhp-toolkit.user.js`. Tampermonkey only updates installs when this number goes up.
-2. Commit and push to `main`.
-3. Tag it: `git tag vX.Y` and `git push --tags`, or `gh release create vX.Y omhp-toolkit.user.js`.
+1. Raise `@version` in `omhp-toolkit.user.js`. Tampermonkey only updates installs when this number goes up, and CI fails any change to the script that doesn't raise it.
+2. Update the README (and the feature notes at the top of the script) for anything new.
+3. Commit and push to `main`. CI checks the script's syntax.
+4. Tag it: `git tag vX.Y` and `git push --tags`. The release workflow checks the tag matches `@version` and creates a GitHub release with the script attached.
 
 ## License
 
