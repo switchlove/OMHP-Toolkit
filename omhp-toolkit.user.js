@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.18
+// @version      0.19
 // @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -41,16 +41,18 @@
 //
 // FIGHT
 //   - YOUR SHARE: your percentage of all the damage on this boss.
-//   - SESSION: damage since the page opened, per hour, best hit, average hit, crit rate.
+//   - SESSION: your damage today, per hour, best hit, average hit, crit rate. Kept
+//     across reloads until [RESET] or a new day.
 //   - FULL IN: time until every attack slot has refilled.
-//   - LOOT: what you found this session, counted by rarity.
+//   - LOOT: what you found today, counted by rarity (kept like SESSION, with [RESET]).
 //
 // TOP BAR
-//   - [COLOUR]: highlight colour and full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
+//   - [COLOUR]: highlight colour, full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), and
+//     FEATURES to switch parts of this script off or on (applies on reload).
 //   - Local time and how long the page has been open.
 //   - The account button shows your badges and name instead of [LOGIN].
 //
-// Your layout, sizes, order, colours and HP history are saved in localStorage.
+// Your layout, sizes, order, colours, features, HP history, session and loot are saved in localStorage.
 
 (function() {
     var LEFT_TABS = ["feed", "chat", "both", "dms"];
@@ -82,6 +84,7 @@
         { name: "VIOLET", hex: "#b28bff" },
         { name: "WHITE", hex: "#e8e1cb" }
     ];
+    var ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
     var css = `
         #app { max-width: 90%; }
@@ -168,21 +171,21 @@
         }
         .col-drag:hover::after, .col-drag.dragging::after { border-left-color: var(--fg); }
 
-        /* Flat tab bar: every unlocked tab as a button, no dropdowns */
-        #tabs .tab-cat { display: none; }
-        #tabs .tab-group { position: static; display: contents; }
-        #tabs .tab-menu, #tabs .tab-menu[hidden] {
+        /* Flat tab bar: every unlocked tab as a button, no dropdowns (FLAT TABS feature) */
+        html.omhp-flattabs #tabs .tab-cat { display: none; }
+        html.omhp-flattabs #tabs .tab-group { position: static; display: contents; }
+        html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] {
             display: flex !important; position: static; transform: none; flex-direction: row; flex-wrap: wrap;
             align-items: center; min-width: 0; padding: 0; margin: 0; background: none; border: 0; box-shadow: none;
         }
-        #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; letter-spacing: 0; }
+        html.omhp-flattabs #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; letter-spacing: 0; }
         /* Short labels (see shortTabs): hide the site's text, show data-short instead */
-        #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
-        #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
-        #tabs .tab-menu button.has-new:not([aria-selected="true"]) { color: var(--amber); }
-        #tabs .tab-menu .tab-link { display: none; }
+        html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
+        html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
+        html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]) { color: var(--amber); }
+        html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
         /* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
-        #tabs .tab-menu, #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
+        html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
 
         /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
         #omhp-eta { font-size: 12px; letter-spacing: .08em; margin-top: 2px; }
@@ -278,6 +281,11 @@
         .omhp-themes { display: flex; gap: 8px; white-space: nowrap; }
         .omhp-theme { font-size: 11px; color: var(--dim); }
         .omhp-theme.on { color: var(--fg); text-decoration: underline; }
+        .omhp-features { display: flex; flex-wrap: wrap; gap: 4px 8px; max-width: 260px; }
+        .omhp-features-note { font-size: 11px; color: var(--dim); }
+        .omhp-features-note[hidden] { display: none; }
+        .omhp-reset { font-size: 10px; color: var(--faint); margin-left: 6px; }
+        .omhp-reset:hover { color: var(--fg); }
         .omhp-accent-pop {
             position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
             display: flex; flex-direction: column; gap: 8px;
@@ -296,12 +304,17 @@
     style.textContent = css;
     document.head.appendChild(style);
 
-    function loadSaved(key) {
+    function loadJSON(key, fallback) {
         try {
-            return JSON.parse(localStorage.getItem(key)) || {};
+            var v = JSON.parse(localStorage.getItem(key));
+            return v == null ? fallback : v;
         } catch (e) {
-            return {};
+            return fallback;
         }
+    }
+
+    function loadSaved(key) {
+        return loadJSON(key, {});
     }
 
     function save(key, value) {
@@ -312,25 +325,24 @@
         }
     }
 
-    function loadAccent() {
-        try {
-            return JSON.parse(localStorage.getItem(ACCENT_KEY));
-        } catch (e) {
-            return null;
-        }
+    // Features you can switch off in [COLOUR] (all on unless saved as false)
+    var FEATURES_KEY = "omhp.layout.features";
+    var FEATURES = [
+        ["graph", "HP GRAPH"], ["eta", "ETA"], ["share", "SHARE"], ["session", "SESSION"],
+        ["full", "FULL IN"], ["loot", "LOOT"], ["clock", "CLOCK"], ["flattabs", "FLAT TABS"], ["account", "NAME"]
+    ];
+    var features = loadSaved(FEATURES_KEY);
+
+    function isOn(name) {
+        return features[name] !== false;
     }
+
+    if (!isOn("loot")) SECTIONS = SECTIONS.filter(function(s) { return s.key !== "loot"; });
+    if (isOn("flattabs")) document.documentElement.classList.add("omhp-flattabs");
 
     function applyAccent(hex) {
         if (hex) document.documentElement.style.setProperty("--amber", hex);
         else document.documentElement.style.removeProperty("--amber");
-    }
-
-    function loadTheme() {
-        try {
-            return JSON.parse(localStorage.getItem(THEME_KEY));
-        } catch (e) {
-            return null;
-        }
     }
 
     function applyTheme(name) {
@@ -343,8 +355,8 @@
     }
 
     // Before anything else paints, so there's no flash of the old colours
-    applyTheme(loadTheme());
-    applyAccent(loadAccent());
+    applyTheme(loadJSON(THEME_KEY, null));
+    applyAccent(loadJSON(ACCENT_KEY, null));
 
     // The boss's real HP/phase/number from the site's own data (see paintAccount), or null
     // if that isn't available yet. Falls back to the screen only when it isn't fogged.
@@ -364,7 +376,7 @@
         var ph = ((document.getElementById("phase") || {}).textContent || "").match(/PHASE\s+([IVX]+)/);
         return {
             seq: Number(num[0]), hp: hp, max: numberIn(document.getElementById("hp-max")),
-            phase: ph ? ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"].indexOf(ph[1]) : null,
+            phase: ph ? ROMAN.indexOf(ph[1]) : null,
             dmg: numberIn(document.getElementById("g-damage")), alive: true
         };
     }
@@ -389,6 +401,57 @@
 
     function fmt(n) {
         return Math.round(n).toLocaleString("en-US");
+    }
+
+    // 42 -> "42m", 187 -> "3h 07m"
+    function dur(mins) {
+        mins = Math.round(mins);
+        if (mins < 60) return mins + "m";
+        return Math.floor(mins / 60) + "h " + String(mins % 60).padStart(2, "0") + "m";
+    }
+
+    // Local date as "YYYY-MM-DD", for things that start over each day
+    function today() {
+        var d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    // Append " :: el" to the top bar, with the spacing the site uses around its separators
+    function addToBar(bar, el) {
+        var sep = document.createElement("span");
+        sep.className = "sep";
+        sep.textContent = "::";
+        bar.appendChild(document.createTextNode(" "));
+        bar.appendChild(sep);
+        bar.appendChild(document.createTextNode(" "));
+        bar.appendChild(el);
+    }
+
+    // Run fn once at least minMs have passed and test() is true (checked every 100ms),
+    // or after 5s regardless. The minimum gives the site time to restore its own state.
+    function whenReady(minMs, test, fn) {
+        var start = Date.now();
+        (function check() {
+            var waited = Date.now() - start;
+            if (waited >= minMs && test() || waited > 5000) return fn();
+            setTimeout(check, 100);
+        })();
+    }
+
+    // The site has restored its remembered tab
+    function tabsReady() {
+        return !!document.querySelector('#tabs [role=tab][aria-selected="true"]');
+    }
+
+    // A small [RESET] link for the session and loot lines
+    function resetButton(title, onClick) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn-text omhp-reset";
+        b.textContent = "[RESET]";
+        b.title = title;
+        b.addEventListener("click", onClick);
+        return b;
     }
 
     // Drag press that comes within 400ms of the last one counts as a double-click
@@ -463,14 +526,16 @@
         return document.querySelector('#tabs [data-tab="' + key + '"]');
     }
 
-    // The right-hand panel would be empty while one of the moved tabs is selected,
-    // so switch it to the first other tab that's unlocked.
-    function fixRightPanel() {
+    // The right-hand panel would be empty while one of the moved tabs is selected (or
+    // the tab `except`, whose panel has left the column), so switch it to the first
+    // other tab that's unlocked.
+    function fixRightPanel(except) {
         var selected = document.querySelector('#tabs [role=tab][aria-selected="true"]');
-        if (selected && LEFT_TABS.indexOf(selected.dataset.tab) === -1) return;
+        if (selected && selected.dataset.tab !== except && LEFT_TABS.indexOf(selected.dataset.tab) === -1) return;
         var tabs = document.querySelectorAll("#tabs [role=tab]");
         for (var i = 0; i < tabs.length; i++) {
-            if (!tabs[i].hidden && LEFT_TABS.indexOf(tabs[i].dataset.tab) === -1) {
+            var k = tabs[i].dataset.tab;
+            if (!tabs[i].hidden && k !== except && LEFT_TABS.indexOf(k) === -1) {
                 tabs[i].click();
                 return;
             }
@@ -580,16 +645,17 @@
         bridge.id = "omhp-boss-data";
         document.head.appendChild(bridge);
         var main = document.querySelector('script[src*="js/main.js"]');
-        if (!main || !document.getElementById("acct")) return;
+        if (!main) return;
         var v = new URL(main.src).search;
         var base = new URL("./", main.src).href; // the folder main.js is in
 
         var code = `
             Promise.all([import(${JSON.stringify(base + "store.js" + v)}), import(${JSON.stringify(base + "ui/badges.js" + v)})])
                 .then(([store, badges]) => {
-                    const acct = document.getElementById("acct");
+                    const acct = ${isOn("account") ? 'document.getElementById("acct")' : "null"};
                     let watcher = null;
                     const paint = () => {
+                        if (!acct) return; // NAME feature off, or no account button
                         try {
                             const me = store.state.me;
                             // Not logged in: keep the site's [LOG IN]
@@ -604,10 +670,12 @@
                     };
                     // The site resets the button to [login] on every player update, and its
                     // handler can run after ours, so repaint whenever it overwrites the button.
-                    watcher = new MutationObserver(paint);
-                    watcher.observe(acct, { childList: true, characterData: true, subtree: true });
-                    store.on("me", paint);
-                    paint();
+                    if (acct) {
+                        watcher = new MutationObserver(paint);
+                        watcher.observe(acct, { childList: true, characterData: true, subtree: true });
+                        store.on("me", paint);
+                        paint();
+                    }
 
                     // The boss's real numbers for the rest of the script. During the FOG world
                     // event the site draws fake HP on screen, but its own data stays true.
@@ -625,6 +693,31 @@
                     publish();
                 })
                 .catch(() => { /* the site changed its files; leave the button as it is */ });
+
+            // The site only redraws the selected tab's panel when your data changes, so a
+            // panel that's pinned or popped out (see pinPanel / floatingPanels) would go
+            // stale. Redraw those too. These drawers only read the site's state.
+            Promise.all([
+                import(${JSON.stringify(base + "store.js" + v)}),
+                import(${JSON.stringify(base + "ui/tabs.js" + v)}),
+                import(${JSON.stringify(base + "ui/bag.js" + v)}),
+                import(${JSON.stringify(base + "ui/player.js" + v)}),
+                import(${JSON.stringify(base + "ui/shop.js" + v)})
+            ])
+                .then(([store, tabs, bag, player, shop]) => {
+                    const draw = {
+                        bag: bag.renderBag, collection: bag.renderCollection,
+                        player: player.renderPlayer, inventory: player.renderInventory, shop: shop.renderShop
+                    };
+                    store.on("me", () => {
+                        document.querySelectorAll("#omhp-pinned > .panel, .omhp-float-body > .panel").forEach((p) => {
+                            const key = p.id.replace(/^panel-/, "");
+                            if (key === tabs.currentTab() || typeof draw[key] !== "function") return; // the site draws that one
+                            try { draw[key](); } catch (e) { /* leave it as it was */ }
+                        });
+                    });
+                })
+                .catch(() => { /* the site changed its files: pinned panels just won't refresh */ });
         `;
         var script = document.createElement("script");
         script.type = "module";
@@ -773,10 +866,7 @@
                 line.textContent = "HOLDING" + dps;
                 return;
             }
-            var mins = Math.round(hp / perMin);
-            var h = Math.floor(mins / 60), m = mins % 60;
-            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN ~" +
-                (h ? h + "h " + String(m).padStart(2, "0") + "m" : m + "m");
+            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN ~" + dur(hp / perMin);
         }
 
         sample();
@@ -815,7 +905,6 @@
         var boss = store.boss || null;
         var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online]
         var maxHp = null;
-        var ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
         function persist() {
             save(KEY, { v: 2, boss: boss, s: points });
@@ -891,9 +980,19 @@
             points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online"))]);
             // Long fights: thin out the older half instead of dropping the start
             if (points.length > MAX_POINTS) {
-                points = points.filter(function(p, i) { return i % 2 === 0 || i === points.length - 1; });
+                var half = Math.floor(points.length / 2);
+                points = points.slice(0, half).filter(function(p, i) { return i % 2 === 0; }).concat(points.slice(half));
             }
-            draw();
+            // Keep recording in a background tab, but only draw what can be seen
+            if (!document.hidden) draw();
+        }
+
+        // Character size of the plot's font, measured again when the pane resizes
+        var cw = null, lineH = null;
+
+        function measure() {
+            cw = charWidth();
+            lineH = parseFloat(getComputedStyle(plot).lineHeight) || 11;
         }
 
         function charWidth() {
@@ -906,19 +1005,15 @@
         }
 
         function ago(ms) {
-            var mins = Math.round(ms / 60000);
-            if (mins < 60) return mins + "m";
-            var h = Math.floor(mins / 60);
-            return h + "h " + String(mins % 60).padStart(2, "0") + "m";
+            return dur(ms / 60000);
         }
 
         function draw() {
             var max = maxHp || numberIn(hpMax) || Math.max.apply(null, points.map(function(p) { return p[1]; }).concat([1]));
-            var lineH = parseFloat(getComputedStyle(plot).lineHeight) || 11;
+            if (cw === null) measure();
             // As tall as the art beside it, less the heading and the time axis
             var rows = Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - head.offsetHeight - 3 * lineH) / lineH)));
             var LABEL = 5;
-            var cw = charWidth();
             var cols = Math.max(10, Math.floor(pane.clientWidth / cw) - LABEL - 1);
             if (points.length < 2) {
                 head.textContent = "HP · COLLECTING…";
@@ -988,7 +1083,6 @@
                 }
                 prevY = y;
             }
-            // The new phase's numeral reads across the top row, starting at its marker
             // Players online, on its own 0..peak scale: * over the empty space and the dotted fill
             if (maxOnline > 0) {
                 for (var oc = 0; oc < cols; oc++) {
@@ -1063,7 +1157,13 @@
         setInterval(sample, 5000);
         setInterval(persist, 30000);
         window.addEventListener("pagehide", persist);
-        new ResizeObserver(function() { draw(); }).observe(pane);
+        new ResizeObserver(function() {
+            measure();
+            draw();
+        }).observe(pane);
+        document.addEventListener("visibilitychange", function() {
+            if (!document.hidden) draw();
+        });
     }
 
     // In FIGHT, under YOUR DMG ON THIS BOSS: your share of everyone's damage on this boss.
@@ -1088,42 +1188,76 @@
         [mine, all].forEach(function(el) {
             new MutationObserver(paint).observe(el, { childList: true, characterData: true, subtree: true });
         });
-        setInterval(paint, 5000);
         paint();
     }
 
-    // In FIGHT: your damage since this page opened, damage per hour, best hit.
+    // In FIGHT: your damage today (kept across reloads until [RESET] or a new day),
+    // damage per hour while the page was open, best hit, average hit, crit rate.
     function sessionStats() {
         var bossDmg = document.getElementById("boss-dmg");
         var lastHit = document.getElementById("last-hit");
         var box = document.querySelector(".lasthit");
         if (!bossDmg || !box) return;
+        var KEY = "omhp.session";
         var line = document.createElement("div");
         line.id = "omhp-session";
         box.appendChild(line);
 
-        var started = Date.now();
-        var total = 0, best = 0, hits = 0, crits = 0;
+        function fresh() {
+            return { v: 1, day: today(), activeMs: 0, total: 0, best: 0, hits: 0, crits: 0 };
+        }
+        var st = loadSaved(KEY);
+        if (st.v !== 1 || st.day !== today()) st = fresh();
+        var opened = Date.now(); // this page's share of activeMs starts here
         var prev = null;
         var bossNum = null;
+        var reset = resetButton("start the session over", function() {
+            st = fresh();
+            opened = Date.now();
+            persist();
+            paint();
+        });
+
+        // Time with the page open: what earlier pages saved, plus this one
+        function activeMs() {
+            return st.activeMs + Date.now() - opened;
+        }
+
+        function persist() {
+            st.activeMs = activeMs();
+            opened = Date.now();
+            save(KEY, st);
+        }
+
+        var saveTimer = null;
+        function persistSoon() {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(persist, 2000);
+        }
 
         function paint() {
-            var parts = ["SESSION ", val(fmt(total) + " DMG")];
-            var hours = (Date.now() - started) / 3600000;
-            if (hours >= 1 / 60) parts.push(" · ", val(fmt(total / hours) + "/HR"));
-            if (best) parts.push(" · BEST ", val(fmt(best)));
-            if (hits) {
-                parts.push(" · AVG ", val(fmt(total / hits)));
-                parts.push(" · ", val(Math.round(crits / hits * 100) + "%"), " CRIT");
+            // Past midnight: start the new day's session
+            if (st.day !== today()) {
+                st = fresh();
+                opened = Date.now();
             }
+            var parts = ["SESSION ", val(fmt(st.total) + " DMG")];
+            var hours = activeMs() / 3600000;
+            if (hours >= 1 / 60) parts.push(" · ", val(fmt(st.total / hours) + "/HR"));
+            if (st.best) parts.push(" · BEST ", val(fmt(st.best)));
+            if (st.hits) {
+                parts.push(" · AVG ", val(fmt(st.total / st.hits)));
+                parts.push(" · ", val(Math.round(st.crits / st.hits * 100) + "%"), " CRIT");
+            }
+            parts.push(reset);
             line.replaceChildren.apply(line, parts);
         }
 
         // One rise of YOUR DMG = one attack landing. The site draws YOUR LAST HIT in
         // the same update, so read it now to see whether that attack was a crit.
         function countHit() {
-            hits++;
-            if (lastHit && /CRIT/.test(lastHit.textContent || "")) crits++;
+            st.hits++;
+            if (lastHit && /CRIT/.test(lastHit.textContent || "")) st.crits++;
         }
 
         function val(text) {
@@ -1139,46 +1273,51 @@
             var dmg = numberIn(bossDmg);
             if (dmg === null) return;
             if (prev === null) {
-                prev = dmg; // what you'd already done before opening the page
+                prev = dmg; // already counted (or done before the session started)
                 bossNum = num;
             } else if (num !== bossNum || dmg < prev) {
                 // New boss: its counter started from 0
                 bossNum = num;
-                total += dmg;
+                st.total += dmg;
                 if (dmg > 0) countHit();
                 prev = dmg;
+                persistSoon();
             } else if (dmg > prev) {
-                total += dmg - prev;
+                st.total += dmg - prev;
                 countHit();
                 prev = dmg;
+                persistSoon();
             }
             paint();
         }
 
         function readHit() {
             var n = numberIn(lastHit);
-            if (n !== null && n > best) {
-                best = n;
+            if (n !== null && n > st.best) {
+                st.best = n;
+                persistSoon();
                 paint();
             }
         }
 
         new MutationObserver(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
         if (lastHit) new MutationObserver(readHit).observe(lastHit, { childList: true, characterData: true, subtree: true });
-        setInterval(readDamage, 2000);
+        // A safety net in case an update slips past the observer; also keeps /HR current
+        setInterval(readDamage, 10000);
+        setInterval(persist, 60000);
+        window.addEventListener("pagehide", persist);
         readDamage();
-        readHit();
+        // The hit already on screen at load was counted by an earlier page (or isn't today's)
+        paint();
     }
 
-    // [COLOUR] in the top bar: pick the site's highlight colour.
+    // [COLOUR] in the top bar: pick the site's highlight colour, a theme, and which
+    // features are on.
     function accentPicker() {
         var bar = document.getElementById("statusline");
         if (!bar) return;
-        var current = loadAccent() || ACCENTS[0].hex;
+        var current = loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex;
 
-        var sep = document.createElement("span");
-        sep.className = "sep";
-        sep.textContent = "::";
         var wrap = document.createElement("span");
         wrap.className = "omhp-accent-wrap";
         var btn = document.createElement("button");
@@ -1199,7 +1338,7 @@
         pop.appendChild(themes);
 
         // Whole-palette themes
-        var currentTheme = loadTheme() || THEMES[0].name;
+        var currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
         THEMES.forEach(function(t) {
             var b = document.createElement("button");
             b.type = "button";
@@ -1239,6 +1378,31 @@
             swatches.appendChild(s);
         });
 
+        // Features on/off: takes effect on the next reload
+        var feats = document.createElement("div");
+        feats.className = "omhp-features";
+        var note = document.createElement("div");
+        note.className = "omhp-features-note";
+        note.textContent = "reload to apply";
+        note.hidden = true;
+        FEATURES.forEach(function(f) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-text omhp-theme" + (isOn(f[0]) ? " on" : "");
+            b.textContent = f[1];
+            b.title = "turn " + f[1] + " on or off";
+            b.addEventListener("click", function() {
+                if (isOn(f[0])) features[f[0]] = false;
+                else delete features[f[0]];
+                save(FEATURES_KEY, features);
+                b.classList.toggle("on", isOn(f[0]));
+                note.hidden = false;
+            });
+            feats.appendChild(b);
+        });
+        pop.appendChild(feats);
+        pop.appendChild(note);
+
         btn.addEventListener("click", function(e) {
             e.stopPropagation();
             pop.hidden = !pop.hidden;
@@ -1249,11 +1413,7 @@
 
         wrap.appendChild(btn);
         wrap.appendChild(pop);
-        // Match the spacing the site puts around its own separators
-        bar.appendChild(document.createTextNode(" "));
-        bar.appendChild(sep);
-        bar.appendChild(document.createTextNode(" "));
-        bar.appendChild(wrap);
+        addToBar(bar, wrap);
     }
 
     // Under "+1 ATTACK IN 0:42": how long until every attack slot has refilled.
@@ -1287,6 +1447,7 @@
             }
             var secs = Number(next[1]) * 60 + Number(next[2]) + (per - left - 1) * every;
             var h = Math.floor(secs / 3600), m = Math.floor(secs % 3600 / 60), s = secs % 60;
+            // A clock-style countdown ("1:05:09", "42:09"), unlike dur()'s "1h 05m"
             line.textContent = "FULL IN " + (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0");
         }
 
@@ -1294,9 +1455,12 @@
         setInterval(tick, 1000);
     }
 
-    // LOOT section for the left column: what you found this session, by rarity.
-    // Reads your own new lines in the attack feed (the site marks them li.me).
+    // LOOT section for the left column: what you found today, by rarity (kept across
+    // reloads until [RESET] or a new day). Reads your own new lines in the attack feed
+    // (the site marks them li.me).
     function lootLog() {
+        var KEY = "omhp.loot";
+        var MAX_ITEMS = 200;
         var panel = document.createElement("div");
         panel.id = "omhp-loot";
         panel.className = "panel";
@@ -1311,47 +1475,83 @@
         panel.hidden = true;
         document.body.appendChild(panel);
 
-        var counts = {}; // rarity class -> [count, sample element for its colour]
+        // counts: rarity class -> [count, label]; items: newest first, { t, cls, text, sold }
+        function fresh() {
+            return { v: 1, day: today(), counts: {}, items: [] };
+        }
+        var st = loadSaved(KEY);
+        if (st.v !== 1 || st.day !== today()) st = fresh();
         var started = Date.now();
+        var reset = resetButton("clear the loot log", function() {
+            st = fresh();
+            save(KEY, st);
+            list.replaceChildren();
+            paintSummary();
+        });
 
         function paintSummary() {
-            var keys = Object.keys(counts);
-            if (!keys.length) {
-                summary.textContent = "nothing yet this session";
-                return;
-            }
+            var keys = Object.keys(st.counts);
             summary.replaceChildren();
+            if (!keys.length) summary.appendChild(document.createTextNode("nothing yet today"));
             keys.forEach(function(k, i) {
                 if (i) summary.appendChild(document.createTextNode("  "));
                 var s = document.createElement("span");
                 s.className = k;
-                s.textContent = counts[k][1] + " x" + counts[k][0];
+                s.textContent = st.counts[k][1] + " x" + st.counts[k][0];
                 summary.appendChild(s);
             });
+            if (keys.length) summary.appendChild(reset);
         }
 
-        function add(li) {
-            var tag = li.querySelector('[class^="r-"], [class*=" r-"]');
+        // One list line from its saved data. Rarity text is wrapped in its r-* class so
+        // the site's own colours apply.
+        function render(it) {
             var item = document.createElement("li");
             var t = document.createElement("span");
             t.className = "t";
-            t.textContent = new Date().toTimeString().slice(0, 5);
+            t.textContent = it.t;
             item.appendChild(t);
             var m = document.createElement("span");
             m.className = "m";
+            if (it.cls) {
+                var tag = document.createElement("span");
+                tag.className = it.cls;
+                tag.textContent = it.text;
+                m.appendChild(tag);
+            } else {
+                m.textContent = it.text;
+            }
+            if (it.sold) m.appendChild(document.createTextNode(" (sold)"));
+            item.appendChild(m);
+            return item;
+        }
+
+        function add(li) {
+            // Past midnight: start the new day's log
+            if (st.day !== today()) {
+                st = fresh();
+                list.replaceChildren();
+            }
+            var tag = li.querySelector('[class^="r-"], [class*=" r-"]');
+            var it = { t: new Date().toTimeString().slice(0, 5), cls: null, text: "", sold: /auto-sold/.test(li.textContent) };
             if (tag) {
-                m.appendChild(tag.cloneNode(true));
+                it.cls = tag.className;
+                it.text = tag.textContent;
                 var rarity = Array.prototype.filter.call(tag.classList, function(c) { return c.indexOf("r-") === 0; })[0];
                 var label = (tag.textContent.match(/[A-Z][A-Z ]*[A-Z]/) || [rarity.slice(2).toUpperCase()])[0];
-                counts[rarity] = counts[rarity] || [0, label];
-                counts[rarity][0]++;
+                st.counts[rarity] = st.counts[rarity] || [0, label];
+                st.counts[rarity][0]++;
             } else {
                 // Boxes and scrolls: keep the line's own wording after your name
-                m.textContent = (li.querySelector(".m") || li).textContent.replace(/^.*?\b(found|opened)\b/, "$1");
+                it.text = (li.querySelector(".m") || li).textContent.replace(/^.*?\b(found|opened)\b/, "$1");
             }
-            if (/auto-sold/.test(li.textContent)) m.appendChild(document.createTextNode(" (sold)"));
-            item.appendChild(m);
-            list.insertBefore(item, list.firstChild);
+            st.items.unshift(it);
+            if (st.items.length > MAX_ITEMS) {
+                st.items.length = MAX_ITEMS;
+                if (list.lastChild) list.lastChild.remove();
+            }
+            list.insertBefore(render(it), list.firstChild);
+            save(KEY, st);
             paintSummary();
         }
 
@@ -1370,15 +1570,22 @@
             }).observe(feed, { childList: true });
         }
 
+        st.items.forEach(function(it) { list.appendChild(render(it)); });
         paintSummary();
         watch();
     }
+
+    // Set once the saved pin (if any) is back, so pop-out windows restore after it
+    var pinRestored = false;
 
     // [PIN] in the right column's tab bar: keep the open panel showing above the others.
     function pinPanel() {
         var side = document.querySelector("#app .col-side");
         var tabs = document.getElementById("tabs");
-        if (!side || !tabs) return;
+        if (!side || !tabs) {
+            pinRestored = true;
+            return;
+        }
         var box = document.createElement("div");
         box.id = "omhp-pinned";
         box.hidden = true;
@@ -1430,20 +1637,22 @@
         });
 
         paint();
-        var saved = (function() {
-            try { return JSON.parse(localStorage.getItem(PIN_KEY)); } catch (e) { return null; }
-        })();
-        if (saved) {
-            // Load it once by picking its tab, then pin it (after the site restores its own tab)
-            setTimeout(function() {
-                var t = tabButton(saved);
-                if (!t || t.hidden) return;
+        var saved = loadJSON(PIN_KEY, null);
+        if (!saved) {
+            pinRestored = true;
+            return;
+        }
+        // Load it once by picking its tab, then pin it (after the site restores its own tab)
+        whenReady(900, tabsReady, function() {
+            var t = tabButton(saved);
+            if (t && !t.hidden) {
                 var before = document.querySelector('#tabs [role=tab][aria-selected="true"]');
                 t.click();
                 pin(saved);
                 if (before && before !== t) before.click();
-            }, 900);
-        }
+            }
+            pinRestored = true;
+        });
     }
 
     // Pop out any panel into a floating window you can drag and resize, several at once:
@@ -1679,7 +1888,7 @@
             remember(key);
             refit(key);
             // The right column would now be empty under this tab; move it on
-            if (!o.left) fixRightPanelExcept(key);
+            if (!o.left) fixRightPanel(key);
             syncButton();
         }
 
@@ -1708,25 +1917,11 @@
         popOutPanel = popOut;
 
         // Re-open the windows that were open last time (after the site restores its tabs and pins)
-        setTimeout(function() {
+        whenReady(1300, function() { return pinRestored && tabsReady(); }, function() {
             Object.keys(store).forEach(function(k) {
                 if (store[k] && store[k].open) popOut(k);
             });
-        }, 1300);
-    }
-
-    // Like fixRightPanel, but also moves off one more tab whose panel has left the column.
-    function fixRightPanelExcept(key) {
-        var selected = document.querySelector('#tabs [role=tab][aria-selected="true"]');
-        if (selected && selected.dataset.tab !== key && LEFT_TABS.indexOf(selected.dataset.tab) === -1) return;
-        var tabs = document.querySelectorAll("#tabs [role=tab]");
-        for (var i = 0; i < tabs.length; i++) {
-            var k = tabs[i].dataset.tab;
-            if (!tabs[i].hidden && k !== key && LEFT_TABS.indexOf(k) === -1) {
-                tabs[i].click();
-                return;
-            }
-        }
+        });
     }
 
     // Shorter labels on the flat tab bar: "[ AUCTION HOUSE 2 ]" shows as "AUCTION 2".
@@ -1758,43 +1953,35 @@
     function clock() {
         var bar = document.getElementById("statusline");
         if (!bar) return;
-        var sep = document.createElement("span");
-        sep.className = "sep";
-        sep.textContent = "::";
         var span = document.createElement("span");
         span.id = "omhp-clock";
         span.className = "dim";
         var started = Date.now();
 
         function tick() {
-            var now = new Date();
             var mins = Math.floor((Date.now() - started) / 60000);
-            var open = mins >= 60 ? Math.floor(mins / 60) + "h " + String(mins % 60).padStart(2, "0") + "m" : mins + "m";
-            span.textContent = now.toTimeString().slice(0, 5) + " · OPEN " + open;
+            span.textContent = new Date().toTimeString().slice(0, 5) + " · OPEN " + dur(mins);
         }
 
-        bar.appendChild(document.createTextNode(" "));
-        bar.appendChild(sep);
-        bar.appendChild(document.createTextNode(" "));
-        bar.appendChild(span);
+        addToBar(bar, span);
         tick();
         setInterval(tick, 15000);
     }
 
     function moveSections() {
         pinMain();
-        paintAccount();
-        bossGraph();
-        bossEta();
-        damageShare();
-        sessionStats();
-        attackTimer();
+        paintAccount(); // always: it also publishes the boss data (see trueBoss)
+        if (isOn("graph")) bossGraph();
+        if (isOn("eta")) bossEta();
+        if (isOn("share")) damageShare();
+        if (isOn("session")) sessionStats();
+        if (isOn("full")) attackTimer();
         accentPicker();
-        clock();
-        shortTabs();
+        if (isOn("clock")) clock();
+        if (isOn("flattabs")) shortTabs();
         pinPanel();
         floatingPanels();
-        lootLog();
+        if (isOn("loot")) lootLog();
         var columns = document.querySelector("#app .columns");
         if (!columns) return;
         for (var i = 0; i < SECTIONS.length; i++) {
@@ -1845,11 +2032,11 @@
 
         // Let the tab code restore the remembered tab first. Messages only load
         // when their tab is picked, so pick it once, then move the right side on.
-        setTimeout(function() {
+        whenReady(500, tabsReady, function() {
             var dms = tabButton("dms");
             if (dms && !dms.hidden) dms.click();
             fixRightPanel();
-        }, 500);
+        });
     }
 
     if (document.readyState === "loading") {

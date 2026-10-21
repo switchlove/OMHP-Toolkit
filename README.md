@@ -29,16 +29,17 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ### Fight
 - **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**: damage since the page opened, damage per hour, best hit, average hit and crit rate.
+- **SESSION**: your damage today, damage per hour (counting only the time the page was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**.
 - **FULL IN**: time until every attack slot has refilled.
-- **LOOT**: what you found this session, counted by rarity.
+- **LOOT**: what you found today, counted by rarity. Like SESSION, it carries over when you reload and has its own **[RESET]**.
 
 ### Top bar
 - **[COLOUR]**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
+- **FEATURES** (inside [COLOUR]): switch off any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs or account name. Changes apply after a reload.
 - Local time and how long the page has been open.
 - The account button shows your badges and name.
 
-Your layout, sizes, order, colours and HP history are saved in your browser's localStorage.
+Your layout, sizes, order, colours, feature choices, HP history, session and loot are saved in your browser's localStorage.
 
 ## Notes
 
