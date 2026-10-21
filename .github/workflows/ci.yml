@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Syntax check
+        run: node --check omhp-toolkit.user.js
+
+      - name: Check @version was bumped
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          FILE=omhp-toolkit.user.js
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No base commit to compare against, skipping."
+            exit 0
+          fi
+          if git diff --quiet "$BASE" HEAD -- "$FILE"; then
+            echo "$FILE unchanged, skipping."
+            exit 0
+          fi
+          version() { grep -m1 -oP '^//\s*@version\s+\K\S+'; }
+          OLD=$(git show "$BASE:$FILE" | version)
+          NEW=$(version < "$FILE")
+          echo "Base: $OLD  Head: $NEW"
+          if [ "$OLD" = "$NEW" ] || [ "$(printf '%s\n%s\n' "$OLD" "$NEW" | sort -V | tail -n1)" != "$NEW" ]; then
+            echo "::error file=$FILE::$FILE changed but @version was not increased ($OLD -> $NEW). Userscript managers won't pick up the update."
+            exit 1
+          fi
