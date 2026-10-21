@@ -20,6 +20,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
 - **[PIN]** keeps the open panel above the others. Drag the line under it to split the column's height between the two panels. **[POP OUT]** opens it in a floating window.
 - BAG's loot-box cards are smaller, so more fit across the right column.
+- RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
 - Floating windows can be dragged, resized, minimised and faded, and several can be open at once.
 - Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
 
@@ -30,17 +31,26 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ### Fight
 - **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**: your damage today, damage per hour (counting only the time the page was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**.
+- **SESSION**: your damage today, damage per hour (counting only the time the game was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate and loot.
 - **FULL IN**: time until every attack slot has refilled.
 - **LOOT**: what you found today, counted by rarity. Like SESSION, it carries over when you reload and has its own **[RESET]**.
 
+### Alerts
+- The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG]` during FOG.
+- **NOTIFY** (off until you turn it on in FEATURES): desktop notifications while the tab is in the background, for full attacks, a boss going down or a new one arriving, FOG starting or ending, new messages, and loot from a rarity you pick (**LOOT ALERT** in [TOOLKIT], LEGENDARY or better by default).
+
 ### Top bar
-- **[COLOUR]**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
-- **FEATURES** (inside [COLOUR]): switch off any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs or account name. Changes apply after a reload.
+- **[TOOLKIT]**: the toolkit's settings menu.
+  - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
+  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title or notifications on or off. Changes apply after a reload.
+  - **LOOT ALERT**: the lowest rarity that gets a notification.
+  - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
+  - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
+- **⚠ N OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which.
 - Local time and how long the page has been open.
 - The account button shows your badges and name.
 
-Your layout, sizes, order, colours, feature choices, HP history, session and loot are saved in your browser's localStorage.
+Your layout, sizes, order, colours, feature choices, HP history, session and loot are saved in your browser's localStorage. With the game open in more than one tab, one tab records the HP history and loot and the others show what it saves, so nothing is counted twice.
 
 ## Notes
 

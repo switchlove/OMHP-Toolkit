@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.20
+// @version      0.22
 // @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -27,7 +27,8 @@
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
 //     dropdowns). [PIN] keeps the open panel above the others (drag the line under it
 //     to resize). [POP OUT] opens it in a floating window. BAG's loot-box cards are
-//     smaller so more fit across.
+//     smaller so more fit across. RANKS (30s) and HISTORY (60s) refresh
+//     while they're on screen.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can
 //     have several open at once.
 //   - Hides the clutter: the duplicate MESSAGES heading, the key hints and the
@@ -43,17 +44,25 @@
 // FIGHT
 //   - YOUR SHARE: your percentage of all the damage on this boss.
 //   - SESSION: your damage today, per hour, best hit, average hit, crit rate. Kept
-//     across reloads until [RESET] or a new day.
+//     across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
 //   - FULL IN: time until every attack slot has refilled.
 //   - LOOT: what you found today, counted by rarity (kept like SESSION, with [RESET]).
 //
 // TOP BAR
-//   - [COLOUR]: highlight colour, full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), and
-//     FEATURES to switch parts of this script off or on (applies on reload).
+//   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES
+//     to switch parts of this script on or off (applies on reload), the loot alert
+//     rarity, saved LAYOUTs, and EXPORT / IMPORT of everything as a backup file.
 //   - Local time and how long the page has been open.
 //   - The account button shows your badges and name instead of [LOGIN].
+//   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
 //
-// Your layout, sizes, order, colours, features, HP history, session and loot are saved in localStorage.
+// ALERTS
+//   - The browser tab's title adds the boss's HP and kill estimate: "(3/5) [72% ~39m] ...".
+//   - NOTIFY (off by default): desktop notifications while the tab is in the background
+//     for full attacks, boss down / new boss, FOG, new messages and loot from a set rarity.
+//
+// Your layout, sizes, order, colours, features, HP history, session and loot are saved in
+// localStorage. With the game open in several tabs, one records and the others follow it.
 
 (function() {
     var LEFT_TABS = ["feed", "chat", "both", "dms"];
@@ -86,6 +95,14 @@
         { name: "WHITE", hex: "#e8e1cb" }
     ];
     var ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+    // The site's item rarities, lowest first (its r-* classes)
+    var RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "godly", "ascended", "sovereign"];
+    var NOTIFY_RARITY_KEY = "omhp.layout.notifyRarity";
+    // What a layout is made of (presets, RESET): column sizes, section order and heights,
+    // collapsed sections, the pinned panel and its height, pop-out windows
+    var LAYOUT_KEYS = [ORDER_KEY, STORE_KEY, "omhp.layout.heights", "omhp.layout.widths", "omhp.layout.pinH", "omhp.layout.floats", PIN_KEY];
+    var DAYS_KEY = "omhp.days";
+    var PRESETS_KEY = "omhp.presets";
 
     var css = `
         #app { max-width: 90%; }
@@ -290,27 +307,43 @@
         .left-section.floated .left-toggle::after { content: " (popped out)"; color: var(--faint); }
         .left-section.floated > .left-resize { display: none; }
 
-        /* Accent colour picker */
+        /* [TOOLKIT] menu: a header, then one labelled row per setting */
         .omhp-accent-wrap { position: relative; display: inline-block; }
-        .omhp-swatches { display: flex; gap: 6px; }
-        .omhp-themes { display: flex; gap: 8px; white-space: nowrap; }
-        .omhp-theme { font-size: 11px; color: var(--dim); }
-        .omhp-theme.on { color: var(--fg); text-decoration: underline; }
-        .omhp-features { display: flex; flex-wrap: wrap; gap: 4px 8px; max-width: 260px; }
-        .omhp-features-note { font-size: 11px; color: var(--dim); }
-        .omhp-features-note[hidden] { display: none; }
-        .omhp-reset { font-size: 10px; color: var(--faint); margin-left: 6px; }
-        .omhp-reset:hover { color: var(--fg); }
         .omhp-accent-pop {
             position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
-            display: flex; flex-direction: column; gap: 8px;
-            padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+            width: 340px; max-width: calc(100vw - 24px); padding: 0 0 8px;
+            background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+            text-align: left; white-space: normal; font-size: 11px; letter-spacing: .04em;
         }
         .omhp-accent-pop[hidden] { display: none; }
+        .omhp-menu-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 10px; margin-bottom: 2px; border-bottom: 1px solid var(--faint);
+            color: var(--amber); font-size: 12px; letter-spacing: .15em;
+        }
+        .omhp-menu-row { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; padding: 7px 10px 0; }
+        .omhp-menu-label { color: var(--faint); font-size: 10px; letter-spacing: .12em; padding-top: 2px; }
+        .omhp-menu-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+        .omhp-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+        .omhp-choice { font-size: 11px; color: var(--dim); padding: 1px 0; letter-spacing: .04em; text-align: left; }
+        .omhp-choice:hover, .omhp-choice:focus-visible { color: var(--fg); }
+        .omhp-choice.on { color: var(--fg); }
+        .omhp-choice.on:not(.omhp-check) { text-decoration: underline; text-underline-offset: 3px; }
+        .omhp-check::before { content: "[ ] "; color: var(--faint); white-space: pre; }
+        .omhp-check.on::before { content: "[x] "; color: var(--amber); }
+        .omhp-menu-note { padding: 4px 10px 0 96px; color: var(--amber); font-size: 10px; letter-spacing: .08em; }
+        .omhp-menu-note[hidden] { display: none; }
+        .omhp-del { color: var(--faint); margin-left: -7px; }
+        .omhp-del:hover { color: var(--red); }
         .omhp-swatch {
-            width: 18px; height: 18px; padding: 0; border: 1px solid var(--faint); cursor: pointer;
+            width: 16px; height: 16px; padding: 0; border: 1px solid var(--faint); cursor: pointer;
         }
         .omhp-swatch.on { outline: 2px solid var(--fg); outline-offset: 1px; }
+        .omhp-reset { font-size: 10px; color: var(--faint); margin-left: 6px; }
+        .omhp-reset:hover { color: var(--fg); }
+        .omhp-health { color: var(--red); cursor: help; }
+        #omhp-days { white-space: pre; font-size: 11px; line-height: 1.35; color: var(--dim); overflow-x: auto; margin-top: 4px; }
+        #omhp-days[hidden] { display: none; }
         .foot { margin-top: 8px; }
         .foot > p:not(#err) { display: none; }
     `;
@@ -340,16 +373,19 @@
         }
     }
 
-    // Features you can switch off in [COLOUR] (all on unless saved as false)
+    // Features you can switch on/off in [TOOLKIT]: [key, label, on by default?]
     var FEATURES_KEY = "omhp.layout.features";
     var FEATURES = [
-        ["graph", "HP GRAPH"], ["eta", "ETA"], ["share", "SHARE"], ["session", "SESSION"],
-        ["full", "FULL IN"], ["loot", "LOOT"], ["clock", "CLOCK"], ["flattabs", "FLAT TABS"], ["account", "NAME"]
+        ["graph", "HP GRAPH", true], ["eta", "ETA", true], ["share", "SHARE", true], ["session", "SESSION", true],
+        ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
+        ["account", "NAME", true], ["title", "TAB TITLE", true], ["notify", "NOTIFY", false]
     ];
     var features = loadSaved(FEATURES_KEY);
 
     function isOn(name) {
-        return features[name] !== false;
+        if (typeof features[name] === "boolean") return features[name];
+        var f = FEATURES.filter(function(x) { return x[0] === name; })[0];
+        return !f || f[2];
     }
 
     if (!isOn("loot")) SECTIONS = SECTIONS.filter(function(s) { return s.key !== "loot"; });
@@ -441,6 +477,69 @@
         bar.appendChild(document.createTextNode(" "));
         bar.appendChild(el);
     }
+
+    function notifyRarity() {
+        var r = loadJSON(NOTIFY_RARITY_KEY, "legendary");
+        return RARITIES.indexOf(r) === -1 ? "legendary" : r;
+    }
+
+    // A desktop notification, only while this tab is in the background (NOTIFY feature)
+    function notify(text) {
+        if (!isOn("notify") || !document.hidden || !window.Notification || Notification.permission !== "granted") return;
+        try {
+            new Notification("OMHP", { body: text, tag: "omhp-" + text, icon: "https://www.google.com/s2/favicons?sz=64&domain=onemillionhp.com" });
+        } catch (e) {
+            /* some browsers only allow notifications from a service worker */
+        }
+    }
+
+    // The site's numbers for you (lifetime damage, hits, crits), published by the page
+    // script (see paintAccount), or null
+    function myTotals() {
+        var el = document.getElementById("omhp-boss-data");
+        if (!el || !el.dataset.me) return null;
+        try {
+            var t = JSON.parse(el.dataset.me);
+            return typeof t.dmg === "number" && typeof t.hits === "number" ? t : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
+    function isOurKey(k) {
+        return k.indexOf("omhp.layout.") === 0 || ["omhp.session", "omhp.loot", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+    }
+
+    // An earlier day's SESSION or LOOT totals, kept for 30 days (the DAYS table)
+    function archiveDay(day, kind, data) {
+        if (!day || day === today()) return;
+        var days = loadSaved(DAYS_KEY);
+        days[day] = days[day] || {};
+        days[day][kind] = data;
+        var out = {};
+        Object.keys(days).sort().slice(-30).forEach(function(d) { out[d] = days[d]; });
+        save(DAYS_KEY, out);
+    }
+
+    // With the game open in several tabs, one of them is the "leader": only it records the
+    // HP history and the loot log, so nothing is counted twice. The others show what it saves.
+    var TAB_ID = Math.random().toString(36).slice(2);
+    var LEADER_KEY = "omhp.leader";
+
+    function isLeader() {
+        var l = loadJSON(LEADER_KEY, null);
+        if (l && l.id !== TAB_ID && Date.now() - l.t < 15000) return false;
+        save(LEADER_KEY, { id: TAB_ID, t: Date.now() });
+        return true;
+    }
+    setInterval(isLeader, 5000);
+    window.addEventListener("pagehide", function() {
+        var l = loadJSON(LEADER_KEY, null);
+        if (l && l.id === TAB_ID) {
+            try { localStorage.removeItem(LEADER_KEY); } catch (e) { /* ignore */ }
+        }
+    });
 
     // Run fn once at least minMs have passed and test() is true (checked every 100ms),
     // or after 5s regardless. The minimum gives the site time to restore its own state.
@@ -706,8 +805,21 @@
                     store.on("boss", publish);
                     setInterval(publish, 2000);
                     publish();
+
+                    // Your lifetime totals, for SESSION (the attack reply refreshes them)
+                    const publishMe = () => {
+                        const m = store.state.me;
+                        if (!out || !m || typeof m.total_damage !== "number") return;
+                        out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits });
+                    };
+                    store.on("me", publishMe);
+                    publishMe();
                 })
-                .catch(() => { /* the site changed its files; leave the button as it is */ });
+                .catch(() => {
+                    // The site changed its files: the rest of the script falls back to the screen
+                    const out = document.getElementById("omhp-boss-data");
+                    if (out) out.dataset.fail = [out.dataset.fail, "SITE DATA"].filter(Boolean).join(", ");
+                });
 
             // The site only redraws the selected tab's panel when your data changes, so a
             // panel that's pinned or popped out (see pinPanel / floatingPanels) would go
@@ -717,9 +829,21 @@
                 import(${JSON.stringify(base + "ui/tabs.js" + v)}),
                 import(${JSON.stringify(base + "ui/bag.js" + v)}),
                 import(${JSON.stringify(base + "ui/player.js" + v)}),
-                import(${JSON.stringify(base + "ui/shop.js" + v)})
+                import(${JSON.stringify(base + "ui/shop.js" + v)}),
+                import(${JSON.stringify(base + "ui/ranks.js" + v)}),
+                import(${JSON.stringify(base + "ui/history.js" + v)})
             ])
-                .then(([store, tabs, bag, player, shop]) => {
+                .then(([store, tabs, bag, player, shop, ranks, history]) => {
+                    // RANKS and HISTORY only fetch when their tab is opened. Reload them while
+                    // they're on screen (selected, pinned or popped out), this browser tab is
+                    // visible, and you aren't typing in them. CITY and AUCTION refresh themselves.
+                    [["ranks", () => ranks.loadRanks(true), 30000], ["history", () => history.loadHistory(), 60000]].forEach(([key, load, ms]) => {
+                        setInterval(() => {
+                            const p = document.getElementById("panel-" + key);
+                            if (document.hidden || !p || p.hidden || !p.offsetParent || p.contains(document.activeElement)) return;
+                            Promise.resolve(load()).catch(() => {});
+                        }, ms);
+                    });
                     const draw = {
                         bag: bag.renderBag, collection: bag.renderCollection,
                         player: player.renderPlayer, inventory: player.renderInventory, shop: shop.renderShop
@@ -732,7 +856,11 @@
                         });
                     });
                 })
-                .catch(() => { /* the site changed its files: pinned panels just won't refresh */ });
+                .catch(() => {
+                    // The site changed its files: pinned panels and RANKS just won't refresh
+                    const out = document.getElementById("omhp-boss-data");
+                    if (out) out.dataset.fail = [out.dataset.fail, "PANEL REFRESH"].filter(Boolean).join(", ");
+                });
         `;
         var script = document.createElement("script");
         script.type = "module";
@@ -826,11 +954,14 @@
         place();
     }
 
+    // The latest kill estimate ("~39m"), or "" while there isn't one; used by the tab title
+    var etaShort = "";
+
     // Under the HP numbers: how fast the boss is losing HP and when it should die.
     function bossEta() {
         var phase = document.getElementById("phase");
         var hpNow = document.getElementById("hp-now");
-        if (!phase || !hpNow) return;
+        if (!phase || !hpNow) return false;
         var line = document.createElement("div");
         line.id = "omhp-eta";
         line.className = "phase dim";
@@ -841,6 +972,7 @@
         var bossNum = null;
 
         function sample() {
+            etaShort = "";
             var dead = document.getElementById("boss-dead");
             if (dead && !dead.hidden) {
                 line.textContent = "";
@@ -881,7 +1013,8 @@
                 line.textContent = "HOLDING" + dps;
                 return;
             }
-            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN ~" + dur(hp / perMin);
+            etaShort = "~" + dur(hp / perMin);
+            line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort;
         }
 
         sample();
@@ -894,7 +1027,7 @@
         var stage = document.getElementById("boss-stage");
         var hpNow = document.getElementById("hp-now");
         var hpMax = document.getElementById("hp-max");
-        if (!stage || !hpNow) return;
+        if (!stage || !hpNow) return false;
         var KEY = "omhp.layout.hp";
         var MAX_POINTS = 3000;
 
@@ -921,8 +1054,10 @@
         var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online]
         var maxHp = null;
 
+        var leading = false; // this tab records the history (see isLeader)
+
         function persist() {
-            save(KEY, { v: 2, boss: boss, s: points });
+            if (leading) save(KEY, { v: 2, boss: boss, s: points });
         }
 
         // Hover readout: a cursor line on the column under the pointer and a small box with
@@ -986,12 +1121,18 @@
             if (fogged()) return draw();
             var b = trueBoss();
             if (!b) return;
+            if (b.max) maxHp = b.max;
+            leading = isLeader();
+            // Another tab records; its saves arrive through the storage event below
+            if (!leading) {
+                if (!document.hidden) draw();
+                return;
+            }
             var num = String(b.seq);
             if (num !== boss) {
                 boss = num;
                 points = [];
             }
-            if (b.max) maxHp = b.max;
             points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online"))]);
             // Long fights: thin out the older half instead of dropping the start
             if (points.length > MAX_POINTS) {
@@ -1170,8 +1311,16 @@
 
         sample();
         setInterval(sample, 5000);
-        setInterval(persist, 30000);
+        setInterval(persist, 15000);
         window.addEventListener("pagehide", persist);
+        window.addEventListener("storage", function(e) {
+            if (e.key !== KEY || leading) return;
+            var saved = loadSaved(KEY);
+            if (saved.v !== 2) return;
+            boss = saved.boss || null;
+            points = Array.isArray(saved.s) ? saved.s : [];
+            if (!document.hidden) draw();
+        });
         new ResizeObserver(function() {
             measure();
             draw();
@@ -1185,7 +1334,7 @@
     function damageShare() {
         var mine = document.getElementById("boss-dmg");
         var all = document.getElementById("g-damage");
-        if (!mine || !all) return;
+        if (!mine || !all) return false;
         var row = document.createElement("div");
         row.appendChild(document.createTextNode("YOUR SHARE "));
         var val = document.createElement("span");
@@ -1206,74 +1355,89 @@
         paint();
     }
 
-    // In FIGHT: your damage today (kept across reloads until [RESET] or a new day),
-    // damage per hour while the page was open, best hit, average hit, crit rate.
+    // In FIGHT: your damage today, damage per hour while the game was open, best hit, average
+    // hit, crit rate. Kept across reloads and shared by open tabs until [RESET] or a new day
+    // (earlier days go to [DAYS]). Counted from your lifetime totals in the site's data:
+    // today = the totals now, minus the first reading today.
     function sessionStats() {
         var bossDmg = document.getElementById("boss-dmg");
         var lastHit = document.getElementById("last-hit");
         var box = document.querySelector(".lasthit");
-        if (!bossDmg || !box) return;
+        if (!bossDmg || !box) return false;
         var KEY = "omhp.session";
         var line = document.createElement("div");
         line.id = "omhp-session";
         box.appendChild(line);
+        var daysBox = document.createElement("div");
+        daysBox.id = "omhp-days";
+        daysBox.hidden = true;
+        box.appendChild(daysBox);
 
+        // base: the totals at the first reading today; last: the latest reading; extra: what
+        // was counted from the screen while the site's data wasn't available
         function fresh() {
-            return { v: 1, day: today(), activeMs: 0, total: 0, best: 0, hits: 0, crits: 0 };
+            return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0 };
         }
-        var st = loadSaved(KEY);
-        if (st.v !== 1 || st.day !== today()) st = fresh();
-        var opened = Date.now(); // this page's share of activeMs starts here
-        var prev = null;
-        var bossNum = null;
-        var reset = resetButton("start the session over", function() {
-            st = fresh();
-            opened = Date.now();
-            persist();
+
+        function counts(s, t) {
+            var b = s.base;
+            var d = t && b ? { dmg: t.dmg - b.dmg, hits: t.hits - b.hits, crits: (t.crits || 0) - (b.crits || 0) }
+                : { dmg: 0, hits: 0, crits: 0 };
+            return { dmg: d.dmg + s.extra.dmg, hits: d.hits + s.extra.hits, crits: d.crits + s.extra.crits };
+        }
+
+        // The stored session; a new day starts it over and files the old one under DAYS
+        function load() {
+            var s = loadSaved(KEY);
+            if (s.v === 1) {
+                // Saved by v0.19-0.21, which kept running totals
+                s = { v: 2, day: s.day, base: null, last: null, extra: { dmg: s.total || 0, hits: s.hits || 0, crits: s.crits || 0 },
+                    best: s.best || 0, activeMs: s.activeMs || 0, seen: 0 };
+            }
+            if (s.v !== 2) s = fresh();
+            if (s.day !== today()) {
+                var c = counts(s, s.last);
+                if (c.dmg) archiveDay(s.day, "session", { dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs });
+                s = fresh();
+                save(KEY, s);
+            }
+            return s;
+        }
+
+        // Read, change and save, so tabs open side by side don't overwrite each other
+        function update(change) {
+            var s = load();
+            change(s);
+            save(KEY, s);
             paint();
+        }
+
+        // Time with the game open: each tab adds the time since the last tick by any tab,
+        // so two open tabs don't count the same minutes twice
+        var myLast = Date.now();
+        function tickActive() {
+            update(function(s) {
+                var now = Date.now();
+                s.activeMs += Math.max(0, Math.min(90000, now - Math.max(s.seen || 0, myLast))); // not across sleep
+                s.seen = now;
+                myLast = now;
+            });
+        }
+
+        var reset = resetButton("start the session over", function() {
+            update(function(s) {
+                var t = myTotals();
+                Object.assign(s, fresh());
+                s.base = t;
+                s.last = t;
+            });
+            myLast = Date.now();
         });
-
-        // Time with the page open: what earlier pages saved, plus this one
-        function activeMs() {
-            return st.activeMs + Date.now() - opened;
-        }
-
-        function persist() {
-            st.activeMs = activeMs();
-            opened = Date.now();
-            save(KEY, st);
-        }
-
-        var saveTimer = null;
-        function persistSoon() {
-            clearTimeout(saveTimer);
-            saveTimer = setTimeout(persist, 2000);
-        }
-
-        function paint() {
-            // Past midnight: start the new day's session
-            if (st.day !== today()) {
-                st = fresh();
-                opened = Date.now();
-            }
-            var parts = ["SESSION ", val(fmt(st.total) + " DMG")];
-            var hours = activeMs() / 3600000;
-            if (hours >= 1 / 60) parts.push(" · ", val(fmt(st.total / hours) + "/HR"));
-            if (st.best) parts.push(" · BEST ", val(fmt(st.best)));
-            if (st.hits) {
-                parts.push(" · AVG ", val(fmt(st.total / st.hits)));
-                parts.push(" · ", val(Math.round(st.crits / st.hits * 100) + "%"), " CRIT");
-            }
-            parts.push(reset);
-            line.replaceChildren.apply(line, parts);
-        }
-
-        // One rise of YOUR DMG = one attack landing. The site draws YOUR LAST HIT in
-        // the same update, so read it now to see whether that attack was a crit.
-        function countHit() {
-            st.hits++;
-            if (lastHit && /CRIT/.test(lastHit.textContent || "")) st.crits++;
-        }
+        var daysBtn = resetButton("earlier days", function() {
+            daysBox.hidden = !daysBox.hidden;
+            if (!daysBox.hidden) paintDays();
+        });
+        daysBtn.textContent = "[DAYS]";
 
         function val(text) {
             var s = document.createElement("span");
@@ -1282,141 +1446,316 @@
             return s;
         }
 
-        function readDamage() {
+        function paint() {
+            var s = load();
+            var c = counts(s, myTotals() || s.last);
+            var parts = ["SESSION ", val(fmt(c.dmg) + " DMG")];
+            var hours = s.activeMs / 3600000;
+            if (hours >= 1 / 60) parts.push(" · ", val(fmt(c.dmg / hours) + "/HR"));
+            if (s.best) parts.push(" · BEST ", val(fmt(s.best)));
+            if (c.hits > 0) {
+                parts.push(" · AVG ", val(fmt(c.dmg / c.hits)));
+                parts.push(" · ", val(Math.round(c.crits / c.hits * 100) + "%"), " CRIT");
+            }
+            parts.push(daysBtn, reset);
+            line.replaceChildren.apply(line, parts);
+        }
+
+        // The DAYS table: one line per earlier day, newest first
+        function paintDays() {
+            var all = loadSaved(DAYS_KEY);
+            var dates = Object.keys(all).sort().reverse().slice(0, 14);
+            if (!dates.length) {
+                daysBox.textContent = "no earlier days yet";
+                return;
+            }
+            var lines = ["DAY      DMG    /HR  HITS CRIT  LOOT"];
+            dates.forEach(function(d) {
+                var x = all[d].session || {}, l = (all[d].loot || {}).counts || {};
+                var hrs = (x.activeMs || 0) / 3600000;
+                var loot = Object.keys(l).map(function(k) { return l[k][1] + " x" + l[k][0]; }).join(" ");
+                lines.push(d.slice(5) + "  " + short(x.dmg || 0).padStart(6) + " " +
+                    (hrs >= 1 / 60 ? short(Math.round((x.dmg || 0) / hrs)) : "-").padStart(6) + " " +
+                    String(x.hits || 0).padStart(5) + " " +
+                    (x.hits ? Math.round(x.crits / x.hits * 100) + "%" : "-").padStart(4) + "  " + loot);
+            });
+            daysBox.textContent = lines.join("\n");
+        }
+
+        // Fallback while the site's data isn't there: YOUR DMG ON THIS BOSS on screen
+        var prev = null;
+        var bossNum = null;
+        function readScreen() {
             var numEl = document.getElementById("boss-num");
             var num = numEl ? numEl.textContent : "";
             var dmg = numberIn(bossDmg);
             if (dmg === null) return;
-            if (prev === null) {
-                prev = dmg; // already counted (or done before the session started)
-                bossNum = num;
-            } else if (num !== bossNum || dmg < prev) {
+            var add = 0;
+            if (prev === null) bossNum = num; // already counted (or done before the session started)
+            else if (num !== bossNum || dmg < prev) {
                 // New boss: its counter started from 0
                 bossNum = num;
-                st.total += dmg;
-                if (dmg > 0) countHit();
-                prev = dmg;
-                persistSoon();
-            } else if (dmg > prev) {
-                st.total += dmg - prev;
-                countHit();
-                prev = dmg;
-                persistSoon();
-            }
-            paint();
+                add = dmg;
+            } else if (dmg > prev) add = dmg - prev;
+            prev = dmg;
+            // One rise = one attack; YOUR LAST HIT is drawn in the same update. Another open
+            // tab counts it if that one is the leader.
+            if (!add || !isLeader()) return paint();
+            var crit = lastHit && /CRIT/.test(lastHit.textContent || "") ? 1 : 0;
+            update(function(s) {
+                s.extra.dmg += add;
+                s.extra.hits++;
+                s.extra.crits += crit;
+            });
+        }
+
+        function readDamage() {
+            var t = myTotals();
+            if (!t) return readScreen();
+            update(function(s) {
+                // First reading today, or the totals went backwards (another account?): count from here
+                if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
+                s.last = t;
+            });
         }
 
         function readHit() {
             var n = numberIn(lastHit);
-            if (n !== null && n > st.best) {
-                st.best = n;
-                persistSoon();
-                paint();
+            if (n !== null && n > load().best) {
+                update(function(s) { s.best = Math.max(s.best, n); });
             }
         }
 
         new MutationObserver(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
+        var bridge = document.getElementById("omhp-boss-data");
+        if (bridge) new MutationObserver(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
         if (lastHit) new MutationObserver(readHit).observe(lastHit, { childList: true, characterData: true, subtree: true });
-        // A safety net in case an update slips past the observer; also keeps /HR current
+        // Another tab saved: show its numbers
+        window.addEventListener("storage", function(e) {
+            if (e.key === KEY) paint();
+            if (e.key === DAYS_KEY && !daysBox.hidden) paintDays();
+        });
         setInterval(readDamage, 10000);
-        setInterval(persist, 60000);
-        window.addEventListener("pagehide", persist);
+        setInterval(tickActive, 10000);
+        window.addEventListener("pagehide", tickActive);
         readDamage();
         // The hit already on screen at load was counted by an earlier page (or isn't today's)
         paint();
     }
 
-    // [COLOUR] in the top bar: pick the site's highlight colour, a theme, and which
-    // features are on.
-    function accentPicker() {
+    // [TOOLKIT] in the top bar: highlight colour, theme, features, loot alerts, layouts and
+    // backups.
+    function toolkitMenu() {
         var bar = document.getElementById("statusline");
         if (!bar) return;
         var current = loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex;
+        var currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
 
-        var wrap = document.createElement("span");
-        wrap.className = "omhp-accent-wrap";
-        var btn = document.createElement("button");
+        function el(tag, cls, text) {
+            var e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (text != null) e.textContent = text;
+            return e;
+        }
+
+        function choice(text, on, title, onClick) {
+            var b = el("button", "btn-text omhp-choice" + (on ? " on" : ""), text);
+            b.type = "button";
+            if (title) b.title = title;
+            b.addEventListener("click", onClick);
+            return b;
+        }
+
+        var wrap = el("span", "omhp-accent-wrap");
+        var btn = el("button", "btn-text", "[TOOLKIT]");
         btn.type = "button";
         btn.id = "omhp-accent";
-        btn.className = "btn-text";
-        btn.textContent = "[COLOUR]";
-        btn.title = "highlight colour";
+        btn.title = "OMHP Toolkit: colours, features, layouts";
         btn.style.color = "var(--amber)";
-        var pop = document.createElement("div");
-        pop.className = "omhp-accent-pop";
+        var pop = el("div", "omhp-accent-pop");
         pop.hidden = true;
-        var swatches = document.createElement("div");
-        swatches.className = "omhp-swatches";
-        var themes = document.createElement("div");
-        themes.className = "omhp-themes";
-        pop.appendChild(swatches);
-        pop.appendChild(themes);
+        pop.setAttribute("role", "dialog");
+        pop.setAttribute("aria-label", "OMHP Toolkit settings");
 
-        // Whole-palette themes
-        var currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
-        THEMES.forEach(function(t) {
-            var b = document.createElement("button");
-            b.type = "button";
-            b.className = "btn-text omhp-theme" + (t.name === currentTheme ? " on" : "");
-            b.textContent = t.name;
-            b.dataset.theme = t.name;
-            b.addEventListener("click", function() {
+        // A labelled row: "THEME     TERMINAL  MIDNIGHT  ..."
+        function row(label, items) {
+            var r = el("div", "omhp-menu-row");
+            r.appendChild(el("div", "omhp-menu-label", label));
+            var body = el("div", "omhp-menu-body");
+            items.forEach(function(x) { body.appendChild(x); });
+            r.appendChild(body);
+            pop.appendChild(r);
+            return body;
+        }
+
+        // Header: name, version, close
+        var head = el("div", "omhp-menu-head");
+        var version = typeof GM_info !== "undefined" && GM_info.script ? " v" + GM_info.script.version : "";
+        head.appendChild(el("span", null, "OMHP TOOLKIT" + version));
+        head.appendChild(choice("[X]", false, "close", function() { pop.hidden = true; }));
+        pop.appendChild(head);
+
+        var swatches = ACCENTS.map(function(a) {
+            var sw = el("button", "omhp-swatch" + (a.hex === current ? " on" : ""));
+            sw.type = "button";
+            sw.style.background = a.hex;
+            sw.title = a.name;
+            sw.addEventListener("click", function() {
+                current = a.hex;
+                var stored = a.hex === ACCENTS[0].hex ? null : a.hex; // the default is stored as "no override"
+                applyAccent(stored);
+                save(ACCENT_KEY, stored);
+                swatches.forEach(function(x) { x.classList.toggle("on", x === sw); });
+            });
+            return sw;
+        });
+        row("COLOUR", swatches);
+
+        var themeBtns = THEMES.map(function(t) {
+            var b = choice(t.name, t.name === currentTheme, null, function() {
                 currentTheme = t.name;
                 var stored = t.vars ? t.name : null; // the default is stored as "no override"
                 applyTheme(stored);
                 save(THEME_KEY, stored);
-                themes.querySelectorAll(".omhp-theme").forEach(function(x) {
-                    x.classList.toggle("on", x.dataset.theme === currentTheme);
-                });
+                themeBtns.forEach(function(x) { x.classList.toggle("on", x === b); });
             });
-            themes.appendChild(b);
+            return b;
         });
-
-        ACCENTS.forEach(function(a) {
-            var s = document.createElement("button");
-            s.type = "button";
-            s.className = "omhp-swatch" + (a.hex === current ? " on" : "");
-            s.style.background = a.hex;
-            s.title = a.name;
-            s.dataset.hex = a.hex;
-            s.addEventListener("click", function() {
-                current = a.hex;
-                // The default is stored as "no override"
-                var stored = a.hex === ACCENTS[0].hex ? null : a.hex;
-                applyAccent(stored);
-                save(ACCENT_KEY, stored);
-                pop.querySelectorAll(".omhp-swatch").forEach(function(x) {
-                    x.classList.toggle("on", x.dataset.hex === current);
-                });
-                pop.hidden = true;
-            });
-            swatches.appendChild(s);
-        });
+        row("THEME", themeBtns);
 
         // Features on/off: takes effect on the next reload
-        var feats = document.createElement("div");
-        feats.className = "omhp-features";
-        var note = document.createElement("div");
-        note.className = "omhp-features-note";
-        note.textContent = "reload to apply";
+        var note = el("div", "omhp-menu-note", "reload the page to apply");
         note.hidden = true;
-        FEATURES.forEach(function(f) {
-            var b = document.createElement("button");
-            b.type = "button";
-            b.className = "btn-text omhp-theme" + (isOn(f[0]) ? " on" : "");
-            b.textContent = f[1];
-            b.title = "turn " + f[1] + " on or off";
-            b.addEventListener("click", function() {
-                if (isOn(f[0])) features[f[0]] = false;
-                else delete features[f[0]];
+        var featBody = row("FEATURES", FEATURES.map(function(f) {
+            var b = choice(f[1], isOn(f[0]), "turn " + f[1] + " on or off", function() {
+                features[f[0]] = !isOn(f[0]);
                 save(FEATURES_KEY, features);
                 b.classList.toggle("on", isOn(f[0]));
+                b.setAttribute("aria-pressed", String(isOn(f[0])));
                 note.hidden = false;
+                // Browsers only let a page ask for notifications from a click like this one
+                if (f[0] === "notify" && isOn("notify") && window.Notification && Notification.permission === "default") {
+                    Notification.requestPermission();
+                }
             });
-            feats.appendChild(b);
-        });
-        pop.appendChild(feats);
+            b.classList.add("omhp-check");
+            b.setAttribute("aria-pressed", String(isOn(f[0])));
+            return b;
+        }));
+        featBody.classList.add("omhp-menu-grid");
         pop.appendChild(note);
+
+        // NOTIFY: the lowest loot rarity worth a notification (click to step through)
+        var lootMin = choice("", true, "notify for loot of this rarity or better (click to change)", function() {
+            var i = RARITIES.indexOf(notifyRarity());
+            save(NOTIFY_RARITY_KEY, RARITIES[(i + 1) % RARITIES.length]);
+            paintLootMin();
+        });
+        function paintLootMin() {
+            var r = notifyRarity();
+            lootMin.className = "btn-text omhp-choice on r-" + r;
+            lootMin.textContent = r.toUpperCase() + " OR BETTER";
+        }
+        paintLootMin();
+        row("LOOT ALERT", [lootMin]);
+
+        // Layouts: the built-in ones, your saved ones (× deletes), + SAVE
+        var BUILT_IN = { "DEFAULT": {}, "BOSS FOCUS": {} };
+        BUILT_IN["BOSS FOCUS"][STORE_KEY] = JSON.stringify({ feed: true, chat: true, dms: true, loot: true });
+        BUILT_IN["BOSS FOCUS"]["omhp.layout.widths"] = JSON.stringify({ l: 240 });
+
+        function applyLayout(snap) {
+            LAYOUT_KEYS.forEach(function(k) {
+                try {
+                    if (snap[k] == null) localStorage.removeItem(k);
+                    else localStorage.setItem(k, snap[k]);
+                } catch (e) { /* ignore */ }
+            });
+            location.reload();
+        }
+
+        var layoutBody = row("LAYOUT", []);
+        function paintLayouts() {
+            var mine = loadSaved(PRESETS_KEY);
+            layoutBody.replaceChildren();
+            Object.keys(BUILT_IN).forEach(function(name) {
+                layoutBody.appendChild(choice(name, false, "switch to this layout (reloads the page)", function() {
+                    if (name === "DEFAULT" && !confirm("Put the layout back to how it started? Column sizes, order, pins and pop-out windows reset (stats and settings stay).")) return;
+                    applyLayout(BUILT_IN[name]);
+                }));
+            });
+            Object.keys(mine).forEach(function(name) {
+                layoutBody.appendChild(choice(name, false, "switch to this layout (reloads the page)", function() { applyLayout(mine[name]); }));
+                var del = choice("×", false, "delete " + name, function() {
+                    delete mine[name];
+                    save(PRESETS_KEY, mine);
+                    paintLayouts();
+                });
+                del.classList.add("omhp-del");
+                layoutBody.appendChild(del);
+            });
+            layoutBody.appendChild(choice("+ SAVE", false, "save the current layout under a name", function() {
+                var name = (prompt("Name this layout:") || "").trim().toUpperCase().slice(0, 20);
+                if (!name || BUILT_IN[name]) return;
+                var snap = {};
+                LAYOUT_KEYS.forEach(function(k) {
+                    try { snap[k] = localStorage.getItem(k); } catch (e) { /* ignore */ }
+                });
+                mine[name] = snap;
+                save(PRESETS_KEY, mine);
+                paintLayouts();
+            }));
+        }
+        paintLayouts();
+
+        // Backups: everything this toolkit saves, as a file you can load in another browser
+        function exportAll() {
+            var data = {};
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (isOurKey(k)) data[k] = localStorage.getItem(k);
+            }
+            var blob = new Blob([JSON.stringify({ app: "omhp-toolkit", v: 1, saved: new Date().toISOString(), data: data })], { type: "application/json" });
+            var a = el("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "omhp-toolkit-" + today() + ".json";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+        }
+
+        var file = el("input");
+        file.type = "file";
+        file.accept = ".json,application/json";
+        file.hidden = true;
+        file.addEventListener("change", function() {
+            var f = file.files && file.files[0];
+            file.value = "";
+            if (!f) return;
+            f.text().then(function(text) {
+                var got = JSON.parse(text);
+                if (!got || got.app !== "omhp-toolkit" || !got.data || typeof got.data !== "object") throw new Error("this isn't an OMHP Toolkit backup");
+                // Only our own keys, and only values that are valid JSON
+                var keys = Object.keys(got.data).filter(function(k) {
+                    if (!isOurKey(k) || typeof got.data[k] !== "string") return false;
+                    try { JSON.parse(got.data[k]); return true; } catch (e) { return false; }
+                });
+                if (!confirm("Replace your toolkit settings, layout and stats with this backup (" + keys.length + " items)? The page will reload.")) return;
+                var old = [];
+                for (var i = 0; i < localStorage.length; i++) if (isOurKey(localStorage.key(i))) old.push(localStorage.key(i));
+                old.forEach(function(k) { localStorage.removeItem(k); });
+                keys.forEach(function(k) { localStorage.setItem(k, got.data[k]); });
+                location.reload();
+            }).catch(function(e) {
+                alert("Couldn't import: " + e.message);
+            });
+        });
+        row("BACKUP", [
+            choice("EXPORT", false, "download your settings, layouts and stats as a file", exportAll),
+            choice("IMPORT", false, "load a file made with EXPORT (replaces what's here)", function() { file.click(); }),
+            file
+        ]);
 
         btn.addEventListener("click", function(e) {
             e.stopPropagation();
@@ -1424,6 +1763,9 @@
         });
         document.addEventListener("click", function(e) {
             if (!wrap.contains(e.target)) pop.hidden = true;
+        });
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") pop.hidden = true;
         });
 
         wrap.appendChild(btn);
@@ -1435,7 +1777,7 @@
     function attackTimer() {
         var resetIn = document.getElementById("reset-in");
         var pips = document.getElementById("pips");
-        if (!resetIn || !pips) return;
+        if (!resetIn || !pips) return false;
         var line = document.createElement("div");
         line.id = "omhp-full";
         line.className = "reset-in dim";
@@ -1471,8 +1813,8 @@
     }
 
     // LOOT section for the left column: what you found today, by rarity (kept across
-    // reloads until [RESET] or a new day). Reads your own new lines in the attack feed
-    // (the site marks them li.me).
+    // reloads and shared by open tabs until [RESET] or a new day; earlier days go to DAYS).
+    // Reads your own new lines in the attack feed (the site marks them li.me).
     function lootLog() {
         var KEY = "omhp.loot";
         var MAX_ITEMS = 200;
@@ -1494,17 +1836,26 @@
         function fresh() {
             return { v: 1, day: today(), counts: {}, items: [] };
         }
-        var st = loadSaved(KEY);
-        if (st.v !== 1 || st.day !== today()) st = fresh();
+
+        // The stored log; a new day starts it over and files the old counts under DAYS
+        function load() {
+            var s = loadSaved(KEY);
+            if (s.v !== 1) s = fresh();
+            if (s.day !== today()) {
+                if (Object.keys(s.counts || {}).length) archiveDay(s.day, "loot", { counts: s.counts });
+                s = fresh();
+                save(KEY, s);
+            }
+            return s;
+        }
+
         var started = Date.now();
         var reset = resetButton("clear the loot log", function() {
-            st = fresh();
-            save(KEY, st);
-            list.replaceChildren();
-            paintSummary();
+            save(KEY, fresh());
+            redraw();
         });
 
-        function paintSummary() {
+        function paintSummary(st) {
             var keys = Object.keys(st.counts);
             summary.replaceChildren();
             if (!keys.length) summary.appendChild(document.createTextNode("nothing yet today"));
@@ -1541,18 +1892,23 @@
             return item;
         }
 
+        function redraw() {
+            var st = load();
+            list.replaceChildren.apply(list, st.items.map(render));
+            paintSummary(st);
+        }
+
         function add(li) {
-            // Past midnight: start the new day's log
-            if (st.day !== today()) {
-                st = fresh();
-                list.replaceChildren();
-            }
+            // With the game open in several tabs, only the leader writes it down
+            if (!isLeader()) return;
+            var st = load();
             var tag = li.querySelector('[class^="r-"], [class*=" r-"]');
             var it = { t: new Date().toTimeString().slice(0, 5), cls: null, text: "", sold: /auto-sold/.test(li.textContent) };
+            var rarity = null;
             if (tag) {
                 it.cls = tag.className;
                 it.text = tag.textContent;
-                var rarity = Array.prototype.filter.call(tag.classList, function(c) { return c.indexOf("r-") === 0; })[0];
+                rarity = Array.prototype.filter.call(tag.classList, function(c) { return c.indexOf("r-") === 0; })[0];
                 var label = (tag.textContent.match(/[A-Z][A-Z ]*[A-Z]/) || [rarity.slice(2).toUpperCase()])[0];
                 st.counts[rarity] = st.counts[rarity] || [0, label];
                 st.counts[rarity][0]++;
@@ -1561,13 +1917,12 @@
                 it.text = (li.querySelector(".m") || li).textContent.replace(/^.*?\b(found|opened)\b/, "$1");
             }
             st.items.unshift(it);
-            if (st.items.length > MAX_ITEMS) {
-                st.items.length = MAX_ITEMS;
-                if (list.lastChild) list.lastChild.remove();
-            }
-            list.insertBefore(render(it), list.firstChild);
+            if (st.items.length > MAX_ITEMS) st.items.length = MAX_ITEMS;
             save(KEY, st);
-            paintSummary();
+            redraw();
+            if (rarity && RARITIES.indexOf(rarity.slice(2)) >= RARITIES.indexOf(notifyRarity())) {
+                notify("Loot: " + it.text.trim());
+            }
         }
 
         function watch() {
@@ -1585,8 +1940,11 @@
             }).observe(feed, { childList: true });
         }
 
-        st.items.forEach(function(it) { list.appendChild(render(it)); });
-        paintSummary();
+        // Another tab added something (or reset it)
+        window.addEventListener("storage", function(e) {
+            if (e.key === KEY) redraw();
+        });
+        redraw();
         watch();
     }
 
@@ -1989,7 +2347,7 @@
     // The site's own text is left alone (it rewrites it for counts); CSS shows data-short.
     function shortTabs() {
         var tabs = document.getElementById("tabs");
-        if (!tabs) return;
+        if (!tabs) return false;
         var SHORT = [
             ["AUCTION HOUSE", "AUCTION"], ["ACHIEVEMENTS", "ACHIEVE"], ["THE FORGE", "FORGE"],
             ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"]
@@ -2013,7 +2371,7 @@
     // Local time and how long the page has been open, in the top bar.
     function clock() {
         var bar = document.getElementById("statusline");
-        if (!bar) return;
+        if (!bar) return false;
         var span = document.createElement("span");
         span.id = "omhp-clock";
         span.className = "dim";
@@ -2029,20 +2387,125 @@
         setInterval(tick, 15000);
     }
 
+    // The browser tab's title: the site leads it with your attacks, "(3/5) ONE MILLION HP";
+    // this adds the boss's HP and kill estimate after that, "(3/5) [72% ~39m] ONE MILLION HP".
+    function tabTitle() {
+        var OURS = /\[(?:FOG|\d[\d.]*%[^\]]*)\] ?/;
+
+        function paint() {
+            var t = document.title;
+            if (/^\(!\)/.test(t)) return; // a world event is flashing the title: leave it
+            var plain = t.replace(OURS, "");
+            var part = "";
+            if (fogged()) part = "[FOG]";
+            else {
+                var b = trueBoss();
+                if (b && b.max && b.alive !== false) part = "[" + (b.hp / b.max * 100).toFixed(0) + "%" + (etaShort ? " " + etaShort : "") + "]";
+            }
+            var m = plain.match(/^\(\d+\/\d+\)/);
+            var next = !part ? plain : m ? m[0] + " " + part + plain.slice(m[0].length) : part + " " + plain;
+            if (next !== t) document.title = next;
+        }
+
+        var titleEl = document.querySelector("title");
+        // The site rewrites the title on every update of your data: add ours back straight away
+        if (titleEl) new MutationObserver(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
+        setInterval(paint, 5000);
+        paint();
+    }
+
+    // Desktop notifications while this tab is in the background (see notify()): attacks
+    // full, boss killed / new boss, FOG on/off, a new message. Loot is in lootLog().
+    function notifier() {
+        var last = null;
+
+        function dmCount() {
+            var t = (tabButton("dms") || {}).textContent || "";
+            var m = t.match(/(\d+)\s*\]?\s*$/);
+            return m ? Number(m[1]) : 0;
+        }
+
+        function check() {
+            var pips = document.getElementById("pips");
+            var key = ((pips && pips.dataset.key) || "").split("/");
+            var b = trueBoss();
+            var now = {
+                full: Number(key[1]) > 0 && Number(key[0]) >= Number(key[1]),
+                seq: b ? b.seq : null,
+                alive: b ? b.alive !== false : null,
+                fog: fogged(),
+                dms: dmCount()
+            };
+            if (last) {
+                if (now.full && !last.full) notify("Your attacks are full (" + key[0] + "/" + key[1] + ")");
+                if (now.seq !== null && last.seq !== null && now.seq !== last.seq) notify("A new boss is here: #" + now.seq);
+                else if (last.alive && now.alive === false) notify("Boss #" + now.seq + " is down");
+                if (now.fog !== last.fog) notify(now.fog ? "FOG has rolled in" : "The FOG has lifted");
+                if (now.dms > last.dms) notify("New message (" + now.dms + " unread)");
+            }
+            last = now;
+        }
+
+        setInterval(check, 5000);
+        check();
+    }
+
+    // Features that couldn't start (the site changed) and page-script imports that failed,
+    // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
+    var broken = [];
+
+    function healthCheck() {
+        var bar = document.getElementById("statusline");
+        var bridge = document.getElementById("omhp-boss-data");
+        if (!bar) return;
+        var span = document.createElement("span");
+        span.className = "omhp-health";
+        var added = false;
+
+        function paint() {
+            var parts = broken.slice();
+            if (bridge && bridge.dataset.fail) parts = parts.concat(bridge.dataset.fail.split(", "));
+            if (!parts.length) return;
+            span.textContent = "⚠ " + parts.length + " OFF";
+            span.title = "OMHP Toolkit couldn't start: " + parts.join(", ") + " (the site may have changed)";
+            if (!added) {
+                addToBar(bar, span);
+                added = true;
+            }
+        }
+
+        if (bridge) new MutationObserver(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
+        paint();
+    }
+
     function moveSections() {
+        // Start a feature if it's on; note it if it can't find what it needs
+        function run(name, fn) {
+            if (!isOn(name)) return;
+            try {
+                if (fn() === false) broken.push(name.toUpperCase());
+            } catch (e) {
+                broken.push(name.toUpperCase());
+                console.error("OMHP Toolkit:", name, e);
+            }
+        }
+
         pinMain();
         paintAccount(); // always: it also publishes the boss data (see trueBoss)
-        if (isOn("graph")) bossGraph();
-        if (isOn("eta")) bossEta();
-        if (isOn("share")) damageShare();
-        if (isOn("session")) sessionStats();
-        if (isOn("full")) attackTimer();
-        accentPicker();
-        if (isOn("clock")) clock();
-        if (isOn("flattabs")) shortTabs();
+        run("graph", bossGraph);
+        run("eta", bossEta);
+        run("share", damageShare);
+        run("session", sessionStats);
+        run("full", attackTimer);
+        toolkitMenu();
+        run("clock", clock);
+        run("flattabs", shortTabs);
+        run("title", tabTitle);
+        run("notify", notifier);
         pinPanel();
         floatingPanels();
-        if (isOn("loot")) lootLog();
+        run("loot", lootLog);
+        healthCheck();
         var columns = document.querySelector("#app .columns");
         if (!columns) return;
         for (var i = 0; i < SECTIONS.length; i++) {
