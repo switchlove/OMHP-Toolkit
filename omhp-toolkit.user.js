@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.19
+// @version      0.20
 // @description  Wider three-column layout, pop-out panels, boss HP graph and ETA, session/loot stats, and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -25,8 +25,9 @@
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
-//     dropdowns). [PIN] keeps the open panel above the others. [POP OUT] opens it
-//     in a floating window.
+//     dropdowns). [PIN] keeps the open panel above the others (drag the line under it
+//     to resize). [POP OUT] opens it in a floating window. BAG's loot-box cards are
+//     smaller so more fit across.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can
 //     have several open at once.
 //   - Hides the clutter: the duplicate MESSAGES heading, the key hints and the
@@ -233,6 +234,20 @@
             margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
         }
         #omhp-pinned > .panel { min-height: 0; }
+        /* Drag the line under the pinned panel to share the column's height; it has a set
+           height once dragged */
+        #omhp-pinned.sized { flex: none; max-height: none; }
+        #omhp-pin-resize { flex: none; margin: -4px 0 4px; }
+        #omhp-pin-resize[hidden] { display: none; }
+
+        /* BAG: smaller loot-box cards so more fit across the right column */
+        .col-side .box-row, .omhp-float .box-row { gap: 6px; }
+        .col-side .box-card, .omhp-float .box-card { padding: 3px 5px; min-width: 0; }
+        .col-side .box-card pre, .omhp-float .box-card pre { font-size: 10px; line-height: 1.05; margin: 0; }
+        .col-side .box-card-actions, .omhp-float .box-card-actions { gap: 0; margin-top: 2px; }
+        .col-side .box-card-actions .inline-btn, .omhp-float .box-card-actions .inline-btn {
+            font-size: 11px; padding: 1px 2px; letter-spacing: 0;
+        }
         #tabs .omhp-pin { font-size: 11px; padding: 2px 4px; margin-left: 6px; color: var(--dim); }
         #tabs .omhp-pin:hover { color: var(--fg); }
 
@@ -1591,6 +1606,50 @@
         box.hidden = true;
         tabs.insertAdjacentElement("afterend", box);
 
+        // The line under the pinned panel: drag to resize, double-click to reset
+        var PIN_H_KEY = "omhp.layout.pinH";
+        var grip = document.createElement("div");
+        grip.id = "omhp-pin-resize";
+        grip.className = "left-resize";
+        grip.title = "drag to resize, double-click to reset";
+        grip.hidden = true;
+        box.insertAdjacentElement("afterend", grip);
+
+        function setPinHeight(px) {
+            box.classList.toggle("sized", !!px);
+            box.style.height = px ? Math.round(px) + "px" : "";
+        }
+        setPinHeight(loadJSON(PIN_H_KEY, null));
+
+        var isDouble = makeDoublePress();
+        var dragFrom = null; // { y, h } while dragging
+        grip.addEventListener("pointerdown", function(e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            if (isDouble()) {
+                setPinHeight(null);
+                save(PIN_H_KEY, null);
+                return;
+            }
+            grip.setPointerCapture(e.pointerId);
+            grip.classList.add("dragging");
+            dragFrom = { y: e.clientY, h: box.offsetHeight };
+        });
+        grip.addEventListener("pointermove", function(e) {
+            if (!dragFrom) return;
+            // Leave the panel below at least 120px
+            var most = side.clientHeight - tabs.offsetHeight - 120;
+            setPinHeight(Math.max(60, Math.min(most, dragFrom.h + e.clientY - dragFrom.y)));
+        });
+        function endDrag() {
+            if (!dragFrom) return;
+            dragFrom = null;
+            grip.classList.remove("dragging");
+            save(PIN_H_KEY, box.offsetHeight);
+        }
+        grip.addEventListener("pointerup", endDrag);
+        grip.addEventListener("pointercancel", endDrag);
+
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn-text omhp-pin";
@@ -1612,6 +1671,7 @@
             pinned = { key: key, panel: panel, home: panel.nextSibling };
             box.appendChild(panel);
             box.hidden = false;
+            grip.hidden = false;
             panel.hidden = false;
             keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
             save(PIN_KEY, key);
@@ -1626,6 +1686,7 @@
             pinned.panel.hidden = !(sel && sel.dataset.tab === pinned.key);
             pinned = null;
             box.hidden = true;
+            grip.hidden = true;
             save(PIN_KEY, null);
             paint();
         }
