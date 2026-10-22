@@ -8,3 +8,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # eslint and @eslint/js must move together or npm ci fails on the peer dependency
+    groups:
+      eslint:
+        patterns: ["eslint", "@eslint/*"]
