@@ -2,7 +2,8 @@
 
 A Tampermonkey userscript for [One Million HP](https://onemillionhp.com/). It adds a three-column layout with pinned and pop-out panels, a boss HP graph with a kill ETA and replay, session, loot and boss logs, alerts, chat and feed filters, saved layouts and colour themes. Almost everything can be switched off in its own settings menu, **[TOOLKIT]**.
 
-![OMHP Toolkit running on One Million HP](docs/screenshot.png)
+[![OMHP Toolkit running on One Million HP](docs/screenshot.png)](docs/screenshot-hq.png)
+<sub>Click for the full-size (4K) screenshot.</sub>
 
 ## Install
 
