@@ -1,8 +1,11 @@
 name: Release
 
+# Publishes a GitHub release whenever a push to main raises @version.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: [omhp-toolkit.user.js]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,16 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Check tag matches @version
-        run: |
-          VERSION=$(grep -m1 -oP '^//\s*@version\s+\K\S+' omhp-toolkit.user.js)
-          TAG="${GITHUB_REF_NAME#v}"
-          if [ "$VERSION" != "$TAG" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match @version $VERSION"
-            exit 1
-          fi
-
-      - name: Create release
+      - name: Create release for @version if missing
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" omhp-toolkit.user.js --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          VERSION=$(grep -m1 -oP '^//\s*@version\s+\K\S+' omhp-toolkit.user.js)
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already released, skipping."
+            exit 0
+          fi
+          gh release create "$TAG" omhp-toolkit.user.js --target "$GITHUB_SHA" --title "$TAG" --generate-notes

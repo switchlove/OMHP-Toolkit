@@ -69,8 +69,8 @@ This is an unofficial fan-made script and isn't affiliated with One Million HP. 
 
 1. Raise `@version` in `omhp-toolkit.user.js`. Tampermonkey only updates installs when this number goes up, and CI fails any change to the script that doesn't raise it.
 2. Update the README (and the feature notes at the top of the script) for anything new.
-3. Commit and push to `main`. CI checks the script's syntax.
-4. Tag it: `git tag vX.Y` and `git push --tags`. The release workflow checks the tag matches `@version` and creates a GitHub release with the script attached.
+3. Run `npm install` once, then `npm run lint` to catch mistakes such as undefined variables before pushing.
+4. Commit and push to `main`. CI checks the script's syntax and lint, and the release workflow creates a `vX.Y` GitHub release with the script attached. No manual tagging is needed.
 
 ## License
 

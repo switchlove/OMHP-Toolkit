@@ -23,6 +23,11 @@ jobs:
       - name: Syntax check
         run: node --check omhp-toolkit.user.js
 
+      - run: npm ci
+
+      - name: Lint
+        run: npx eslint omhp-toolkit.user.js
+
       - name: Check @version was bumped
         env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}

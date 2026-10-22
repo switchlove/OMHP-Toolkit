@@ -1,0 +1,14 @@
+{
+  "name": "omhp-toolkit",
+  "private": true,
+  "description": "Dev tooling only; the userscript itself has no dependencies.",
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint omhp-toolkit.user.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
+  }
+}
