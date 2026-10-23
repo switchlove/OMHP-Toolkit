@@ -10,8 +10,8 @@
     "lint": "eslint --max-warnings 0 omhp-toolkit.user.js build.js test"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "eslint": "^9.39.5",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
     "globals": "^17.13.0"
   }
 }
