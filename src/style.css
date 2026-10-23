@@ -104,32 +104,39 @@ html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] {
 /* Boss area split: ASCII art left, HP graph right */
 #omhp-boss-split { display: flex; gap: 10px; align-items: center; }
 #omhp-boss-split > #boss-stage { flex: 1 1 0; min-width: 0; }
-#omhp-graph { flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; }
-#omhp-graph-head { font-size: 11px; color: var(--dim); letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; white-space: nowrap; }
-#omhp-graph-plot { margin: 0; font-size: 11px; line-height: 1; letter-spacing: 0; white-space: pre; color: var(--faint); }
-#omhp-graph-plot .line { color: var(--red); }
-#omhp-graph-plot .fill { color: var(--red); opacity: .35; }
-#omhp-graph-plot .heal { color: var(--mythic); }
-#omhp-graph-plot .mark { color: var(--amber); }
-#omhp-graph-plot .online { color: var(--blue); }
-#omhp-graph-plot .mine { color: var(--green); }
-#omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
-#omhp-graph { position: relative; }
-#omhp-graph-plot { cursor: crosshair; }
+.omhp-graph { flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; }
+.omhp-graph-head { font-size: 11px; color: var(--dim); letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; white-space: nowrap; }
+.omhp-graph-plot { margin: 0; font-size: 11px; line-height: 1; letter-spacing: 0; white-space: pre; color: var(--faint); }
+.omhp-graph-plot .line { color: var(--red); }
+.omhp-graph-plot .fill { color: var(--red); opacity: .35; }
+.omhp-graph-plot .heal { color: var(--mythic); }
+.omhp-graph-plot .mark { color: var(--amber); }
+.omhp-graph-plot .online { color: var(--blue); }
+.omhp-graph-plot .mine { color: var(--green); }
+.omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
+.omhp-graph { position: relative; }
+.omhp-graph-plot { cursor: crosshair; }
 /* Legend entries switch their series on and off */
-#omhp-graph-plot [data-series] { cursor: pointer; }
-#omhp-graph-plot [data-series]:hover { color: var(--fg); }
-#omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
-#omhp-graph-cursor {
+.omhp-graph-plot [data-series] { cursor: pointer; }
+.omhp-graph-plot [data-series]:hover { color: var(--fg); }
+.omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
+.omhp-graph-cursor {
     position: absolute; width: 1px; background: var(--fg); opacity: .4; pointer-events: none;
 }
-#omhp-graph-tip {
+.omhp-graph-tip {
     position: absolute; z-index: 2; pointer-events: none; white-space: pre;
     padding: 3px 6px; background: var(--bg-2); border: 1px solid var(--dim);
     color: var(--fg); font-size: 11px; line-height: 1.35; letter-spacing: .03em;
 }
-#omhp-graph-cursor[hidden], #omhp-graph-tip[hidden] { display: none; }
-.omhp-replay { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+.omhp-graph-cursor[hidden], .omhp-graph-tip[hidden] { display: none; }
+.omhp-replay, .omhp-zoom { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+.omhp-zoom { margin-left: 4px; }
+.omhp-zoom:first-of-type { margin-left: 8px; }
+.omhp-zoom.on { color: var(--fg); }
+.omhp-zoom:hover { color: var(--fg); }
+/* An old fight's graph (BOSSES > [GRAPH]) in its own window, filling it */
+.omhp-graph-win .omhp-float-body { padding: 6px 10px 10px; }
+.omhp-graph-win .omhp-graph { flex: 1 1 0; min-height: 0; }
 .omhp-replay:hover { color: var(--fg); }
 
 /* FILTER: hidden and highlighted lines in ATTACKS and CHAT, and the boxes to set them */
@@ -154,7 +161,16 @@ html.omhp-compact .box { padding: 8px; }
 html.omhp-compact .panel-h { margin-bottom: 4px; }
 html.omhp-compact .left-section + .left-section { margin-top: 4px; padding-top: 3px; }
 html.omhp-compact .left-toggle { padding: 0 0 3px; }
-#omhp-session .val { color: var(--fg); }
+/* SESSION: a box of its own under FIGHT, label / value cells */
+.omhp-sess-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 16px;
+    font-size: 12px; text-align: left;
+}
+.omhp-sess-cell { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dotted var(--faint); }
+.omhp-sess-cell[title] { cursor: help; }
+.omhp-sess-cell .k { color: var(--dim); font-size: 11px; letter-spacing: .1em; }
+.omhp-sess-cell .v { color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.omhp-sess-tools { margin-top: 6px; text-align: right; }
 
 /* STATS THEME: Zephy's "1MHP Data Statistics" userscript (#omhp-tracker), when it's
    installed, drawn in this page's theme and highlight colour instead of fixed amber */
@@ -216,6 +232,14 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 /* LOOT section */
 .omhp-loot-sum { margin: 0 0 4px; }
 .omhp-rate { color: var(--faint); font-size: 10px; }
+/* [CHESTS]: the chest ledger, observed against stated odds */
+.omhp-chests { margin: 0 0 6px; font-size: 11px; }
+.omhp-chests[hidden] { display: none; }
+.omhp-chests-head { color: var(--dim); letter-spacing: .08em; margin-bottom: 2px; }
+.omhp-chests-box { color: var(--fg); margin-top: 6px; letter-spacing: .06em; }
+.omhp-chests-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 8.5em; gap: 8px; padding-left: 1ch; }
+.omhp-chests-row .v { color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; }
+.omhp-chests-row .dim { text-align: right; }
 #omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
 
 /* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */

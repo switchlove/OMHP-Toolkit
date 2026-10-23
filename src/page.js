@@ -60,13 +60,46 @@ function paintAccount() {
                 const publishMe = () => {
                     const m = store.state.me;
                     if (!out || !m || typeof m.total_damage !== "number") return;
-                    out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits });
+                    out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards });
                     // The order SHOP lists its loot boxes in (see bagBoxOrder)
                     const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                     if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;
                 };
                 store.on("me", publishMe);
                 publishMe();
+
+                // For the chest ledger (loot.js): each box's stated odds, as outcome -> chance
+                const publishOdds = () => {
+                    const boxes = store.state.content?.boxes;
+                    if (!out || !boxes) return;
+                    const all = {};
+                    for (const b of boxes) {
+                        all[b.id] = { name: b.name, odds: (b.odds ?? []).map((r) => [r.kind === "item" ? (r.rarity || "item")
+                            : r.amount ? r.kind + ":" + r.amount : r.kind, r.chance]) };
+                    }
+                    const text = JSON.stringify(all);
+                    if (out.dataset.boxStated !== text) out.dataset.boxStated = text;
+                };
+                store.on("me", publishOdds);
+                publishOdds();
+
+                // ...and your own box openings as they arrive in the feed (only new ones:
+                // feed times are in seconds). OPEN ALL is one line with just a count.
+                const since = store.now(), seenOpens = new Set();
+                store.on("feed", () => {
+                    const me = store.state.me;
+                    if (!me) return;
+                    for (const e of store.state.feed ?? []) {
+                        if (e.player_id !== me.id || e.t < since || (e.kind !== "unbox" && e.kind !== "unbox_many")) continue;
+                        const id = [e.t, e.kind, e.box_id, e.item_id, e.reward, e.amount, e.count].join("|");
+                        if (seenOpens.has(id)) continue;
+                        seenOpens.add(id);
+                        document.dispatchEvent(new CustomEvent("omhp-unbox", { detail: JSON.stringify({
+                            bulk: e.kind === "unbox_many", box: e.box_id ?? null, count: e.count ?? 1,
+                            reward: e.reward, rarity: e.rarity, amount: e.amount
+                        }) }));
+                    }
+                });
             })
             .catch(() => {
                 // The site changed its files: the rest of the script falls back to the screen

@@ -15,7 +15,7 @@ function bossLog() {
     panel.hidden = true;
     document.body.appendChild(panel);
 
-    function render(x) {
+    function render(x, graphs) {
         var li = document.createElement("li");
         var t = document.createElement("span");
         t.className = "t";
@@ -32,6 +32,11 @@ function bossLog() {
         if (x.peak) bits.push("PEAK " + x.peak);
         if (x.healed > 0) bits.push("HEALED " + short(x.healed));
         m.appendChild(document.createTextNode(" · " + bits.join(" · ")));
+        if (graphs[x.seq]) {
+            var g = resetButton("this boss's HP graph, in a window", function() { openBossGraph(x.seq, x.name); });
+            g.textContent = "[GRAPH]";
+            m.appendChild(g);
+        }
         li.appendChild(m);
         li.title = new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
             (x.killed ? "" : "\n(you weren't watching when it ended)");
@@ -45,7 +50,10 @@ function bossLog() {
             li.className = "dim";
             li.textContent = "bosses you see are listed here once they're gone";
             list.replaceChildren(li);
-        } else list.replaceChildren.apply(list, all.map(render));
+        } else {
+            var graphs = loadSaved(GRAPHS_KEY);
+            list.replaceChildren.apply(list, all.map(function(x) { return render(x, graphs); }));
+        }
     }
 
     function sample() {
@@ -76,8 +84,9 @@ function bossLog() {
     }
 
     window.addEventListener("storage", function(e) {
-        if (e.key === KEY) redraw();
+        if (e.key === KEY || e.key === GRAPHS_KEY) redraw();
     });
+    document.addEventListener("omhp-graphs", redraw); // this tab kept a fight (graph.js)
     redraw();
     sample();
     every(5000, sample);

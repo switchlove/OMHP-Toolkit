@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.26
+// @version      0.27
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -41,19 +41,22 @@
 //     readout for that moment, and clicking a legend entry hides or shows it.
 //   - Under the HP: HP/min, everyone's DMG/min, HP healed, and an estimated kill time
 //     with a range (what the last 1 and 15 minutes say).
+//   - [ALL] [1H] [15M] on the graph zoom in on the recent part of a long fight.
 //   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
-//     peak players online and HP healed.
+//     peak players online and HP healed; [GRAPH] opens its HP graph in a window.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
 //
 // FIGHT
 //   - YOUR SHARE: your percentage of all the damage on this boss.
-//   - SESSION: your damage today, per hour, best hit, average hit, crit rate. Kept
-//     across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
-//     Hover it for the spread of your last 200 hits.
+//   - SESSION (its own box under FIGHT): your damage today, per hour, attacks, best and
+//     average hit, crit rate, shards earned and spent, shards per hour and time played.
+//     Kept across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
+//     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
 //     your attacks sat full, recharging nothing.
 //   - LOOT: what you found today, counted by rarity with drops per 100 attacks (kept like
-//     SESSION, with [RESET]; hover for the last 30 days).
+//     SESSION, with [RESET]; hover for the last 30 days). [CHESTS] compares what your
+//     box openings gave with the site's stated odds.
 //
 // TOP BAR
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.26
+// @version      0.27
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -41,19 +41,22 @@
 //     readout for that moment, and clicking a legend entry hides or shows it.
 //   - Under the HP: HP/min, everyone's DMG/min, HP healed, and an estimated kill time
 //     with a range (what the last 1 and 15 minutes say).
+//   - [ALL] [1H] [15M] on the graph zoom in on the recent part of a long fight.
 //   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
-//     peak players online and HP healed.
+//     peak players online and HP healed; [GRAPH] opens its HP graph in a window.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
 //
 // FIGHT
 //   - YOUR SHARE: your percentage of all the damage on this boss.
-//   - SESSION: your damage today, per hour, best hit, average hit, crit rate. Kept
-//     across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
-//     Hover it for the spread of your last 200 hits.
+//   - SESSION (its own box under FIGHT): your damage today, per hour, attacks, best and
+//     average hit, crit rate, shards earned and spent, shards per hour and time played.
+//     Kept across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
+//     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
 //     your attacks sat full, recharging nothing.
 //   - LOOT: what you found today, counted by rarity with drops per 100 attacks (kept like
-//     SESSION, with [RESET]; hover for the last 30 days).
+//     SESSION, with [RESET]; hover for the last 30 days). [CHESTS] compares what your
+//     box openings gave with the site's stated odds.
 //
 // TOP BAR
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES
@@ -148,6 +151,11 @@
         return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     }
 
+    // A time as "14:32"
+    function hhmm(t) {
+        return new Date(t).toTimeString().slice(0, 5);
+    }
+
     // The tab title with our part ("[72% ~39m]", "[FOG]", or "" for none) after the site's
     // attack count: "(3/5) ONE MILLION HP" -> "(3/5) [72% ~39m] ONE MILLION HP". A title a
     // world event is flashing ("(!) ...") is left as it is.
@@ -174,6 +182,33 @@
     function dropRate(n, hits) {
         var pct = n / hits * 100;
         return (pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)) + "%";
+    }
+
+    // A chance (0..1) the way the site's odds box writes it: 48% / 9.6% / 0.12% / <0.001%
+    function pct(p) {
+        var v = p * 100;
+        if (v <= 0) return "0%";
+        if (v < 0.001) return "<0.001%";
+        if (v >= 99.95) return "100%";
+        var digits = v >= 10 ? 0 : v >= 1 ? 1 : Math.min(3, 1 - Math.floor(Math.log10(v)));
+        return Number(v.toFixed(digits)) + "%";
+    }
+
+    // The chest ledger's name for what a box gave: the rarity for an item ("legendary"),
+    // otherwise the reward and its amount ("attacks:5", "ultimate")
+    function outcomeKey(kind, rarity, amount) {
+        if (kind === "item") return rarity || "item";
+        return amount ? kind + ":" + amount : kind;
+    }
+
+    // ...and how it reads: "LEGENDARY", "+5 ATTACKS", "2 CRIT CHARGES", "ULTIMATE"
+    function outcomeLabel(key) {
+        var parts = key.split(":"), kind = parts[0], n = Number(parts[1]);
+        if (kind === "attacks") return "+" + n + " ATTACK" + (n === 1 ? "" : "S");
+        if (kind === "next_crit") return n + " CRIT CHARGE" + (n === 1 ? "" : "S");
+        if (kind === "ultimate") return "ULTIMATE RECHARGE";
+        if (kind === "scroll") return "A SCROLL";
+        return kind.replace(/_/g, " ").toUpperCase();
     }
 
     // HP lost per minute over the last `mins` minutes of samples ({ t, hp }, oldest first), or
@@ -204,6 +239,14 @@
         if (points.length <= max) return points;
         var half = Math.floor(points.length / 2);
         return points.slice(0, half).filter(function(p, i) { return i % 2 === 0; }).concat(points.slice(half));
+    }
+
+    // At most n points, picked evenly across the whole list (the first and last always kept)
+    function shrinkPoints(points, n) {
+        if (points.length <= n) return points.slice();
+        var out = [];
+        for (var i = 0; i < n; i++) out.push(points[Math.round(i * (points.length - 1) / (n - 1))]);
+        return out;
     }
 
     // The HP graph's columns: for `cols` columns from t0 over `span` ms, the last reading in
@@ -345,32 +388,39 @@
         /* Boss area split: ASCII art left, HP graph right */
         #omhp-boss-split { display: flex; gap: 10px; align-items: center; }
         #omhp-boss-split > #boss-stage { flex: 1 1 0; min-width: 0; }
-        #omhp-graph { flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; }
-        #omhp-graph-head { font-size: 11px; color: var(--dim); letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; white-space: nowrap; }
-        #omhp-graph-plot { margin: 0; font-size: 11px; line-height: 1; letter-spacing: 0; white-space: pre; color: var(--faint); }
-        #omhp-graph-plot .line { color: var(--red); }
-        #omhp-graph-plot .fill { color: var(--red); opacity: .35; }
-        #omhp-graph-plot .heal { color: var(--mythic); }
-        #omhp-graph-plot .mark { color: var(--amber); }
-        #omhp-graph-plot .online { color: var(--blue); }
-        #omhp-graph-plot .mine { color: var(--green); }
-        #omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
-        #omhp-graph { position: relative; }
-        #omhp-graph-plot { cursor: crosshair; }
+        .omhp-graph { flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; }
+        .omhp-graph-head { font-size: 11px; color: var(--dim); letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; white-space: nowrap; }
+        .omhp-graph-plot { margin: 0; font-size: 11px; line-height: 1; letter-spacing: 0; white-space: pre; color: var(--faint); }
+        .omhp-graph-plot .line { color: var(--red); }
+        .omhp-graph-plot .fill { color: var(--red); opacity: .35; }
+        .omhp-graph-plot .heal { color: var(--mythic); }
+        .omhp-graph-plot .mark { color: var(--amber); }
+        .omhp-graph-plot .online { color: var(--blue); }
+        .omhp-graph-plot .mine { color: var(--green); }
+        .omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
+        .omhp-graph { position: relative; }
+        .omhp-graph-plot { cursor: crosshair; }
         /* Legend entries switch their series on and off */
-        #omhp-graph-plot [data-series] { cursor: pointer; }
-        #omhp-graph-plot [data-series]:hover { color: var(--fg); }
-        #omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
-        #omhp-graph-cursor {
+        .omhp-graph-plot [data-series] { cursor: pointer; }
+        .omhp-graph-plot [data-series]:hover { color: var(--fg); }
+        .omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
+        .omhp-graph-cursor {
             position: absolute; width: 1px; background: var(--fg); opacity: .4; pointer-events: none;
         }
-        #omhp-graph-tip {
+        .omhp-graph-tip {
             position: absolute; z-index: 2; pointer-events: none; white-space: pre;
             padding: 3px 6px; background: var(--bg-2); border: 1px solid var(--dim);
             color: var(--fg); font-size: 11px; line-height: 1.35; letter-spacing: .03em;
         }
-        #omhp-graph-cursor[hidden], #omhp-graph-tip[hidden] { display: none; }
-        .omhp-replay { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+        .omhp-graph-cursor[hidden], .omhp-graph-tip[hidden] { display: none; }
+        .omhp-replay, .omhp-zoom { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+        .omhp-zoom { margin-left: 4px; }
+        .omhp-zoom:first-of-type { margin-left: 8px; }
+        .omhp-zoom.on { color: var(--fg); }
+        .omhp-zoom:hover { color: var(--fg); }
+        /* An old fight's graph (BOSSES > [GRAPH]) in its own window, filling it */
+        .omhp-graph-win .omhp-float-body { padding: 6px 10px 10px; }
+        .omhp-graph-win .omhp-graph { flex: 1 1 0; min-height: 0; }
         .omhp-replay:hover { color: var(--fg); }
 
         /* FILTER: hidden and highlighted lines in ATTACKS and CHAT, and the boxes to set them */
@@ -395,7 +445,16 @@
         html.omhp-compact .panel-h { margin-bottom: 4px; }
         html.omhp-compact .left-section + .left-section { margin-top: 4px; padding-top: 3px; }
         html.omhp-compact .left-toggle { padding: 0 0 3px; }
-        #omhp-session .val { color: var(--fg); }
+        /* SESSION: a box of its own under FIGHT, label / value cells */
+        .omhp-sess-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 16px;
+            font-size: 12px; text-align: left;
+        }
+        .omhp-sess-cell { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dotted var(--faint); }
+        .omhp-sess-cell[title] { cursor: help; }
+        .omhp-sess-cell .k { color: var(--dim); font-size: 11px; letter-spacing: .1em; }
+        .omhp-sess-cell .v { color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .omhp-sess-tools { margin-top: 6px; text-align: right; }
 
         /* STATS THEME: Zephy's "1MHP Data Statistics" userscript (#omhp-tracker), when it's
            installed, drawn in this page's theme and highlight colour instead of fixed amber */
@@ -457,6 +516,14 @@
         /* LOOT section */
         .omhp-loot-sum { margin: 0 0 4px; }
         .omhp-rate { color: var(--faint); font-size: 10px; }
+        /* [CHESTS]: the chest ledger, observed against stated odds */
+        .omhp-chests { margin: 0 0 6px; font-size: 11px; }
+        .omhp-chests[hidden] { display: none; }
+        .omhp-chests-head { color: var(--dim); letter-spacing: .08em; margin-bottom: 2px; }
+        .omhp-chests-box { color: var(--fg); margin-top: 6px; letter-spacing: .06em; }
+        .omhp-chests-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 8.5em; gap: 8px; padding-left: 1ch; }
+        .omhp-chests-row .v { color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; }
+        .omhp-chests-row .dim { text-align: right; }
         #omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
 
         /* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */
@@ -737,7 +804,7 @@
     // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
     function isOurKey(k) {
         return k.indexOf("omhp.layout.") === 0 ||
-            ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+            ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
     }
 
     // Your attacks today, from the stored SESSION (see sessionStats), or 0
@@ -1076,13 +1143,46 @@
                     const publishMe = () => {
                         const m = store.state.me;
                         if (!out || !m || typeof m.total_damage !== "number") return;
-                        out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits });
+                        out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards });
                         // The order SHOP lists its loot boxes in (see bagBoxOrder)
                         const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                         if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;
                     };
                     store.on("me", publishMe);
                     publishMe();
+
+                    // For the chest ledger (loot.js): each box's stated odds, as outcome -> chance
+                    const publishOdds = () => {
+                        const boxes = store.state.content?.boxes;
+                        if (!out || !boxes) return;
+                        const all = {};
+                        for (const b of boxes) {
+                            all[b.id] = { name: b.name, odds: (b.odds ?? []).map((r) => [r.kind === "item" ? (r.rarity || "item")
+                                : r.amount ? r.kind + ":" + r.amount : r.kind, r.chance]) };
+                        }
+                        const text = JSON.stringify(all);
+                        if (out.dataset.boxStated !== text) out.dataset.boxStated = text;
+                    };
+                    store.on("me", publishOdds);
+                    publishOdds();
+
+                    // ...and your own box openings as they arrive in the feed (only new ones:
+                    // feed times are in seconds). OPEN ALL is one line with just a count.
+                    const since = store.now(), seenOpens = new Set();
+                    store.on("feed", () => {
+                        const me = store.state.me;
+                        if (!me) return;
+                        for (const e of store.state.feed ?? []) {
+                            if (e.player_id !== me.id || e.t < since || (e.kind !== "unbox" && e.kind !== "unbox_many")) continue;
+                            const id = [e.t, e.kind, e.box_id, e.item_id, e.reward, e.amount, e.count].join("|");
+                            if (seenOpens.has(id)) continue;
+                            seenOpens.add(id);
+                            document.dispatchEvent(new CustomEvent("omhp-unbox", { detail: JSON.stringify({
+                                bulk: e.kind === "unbox_many", box: e.box_id ?? null, count: e.count ?? 1,
+                                reward: e.reward, rarity: e.rarity, amount: e.amount
+                            }) }));
+                        }
+                    });
                 })
                 .catch(() => {
                     // The site changed its files: the rest of the script falls back to the screen
@@ -1296,67 +1396,59 @@
         every(5000, sample);
     }
 
-    // Split the boss area: the ASCII art on the left, an ASCII graph of the boss's HP
-    // on the right covering its whole life since you first saw it (kept across reloads).
-    function bossGraph() {
-        var stage = document.getElementById("boss-stage");
-        var hpNow = document.getElementById("hp-now");
-        var hpMax = document.getElementById("hp-max");
-        if (!stage || !hpNow) return false;
-        var KEY = "omhp.layout.hp";
-        var MAX_POINTS = 3000;
+    // An ASCII graph of a boss's HP in `pane`: a heading with zoom ranges ([ALL] [1H] [15M])
+    // and [REPLAY], the plot, a hover readout, and a legend whose entries switch their series
+    // on and off. Used by the live graph beside the boss and by old fights from BOSSES.
+    //   source()  -> { points, fog, max, end, label(t0, span, zoomed), title }: what to draw.
+    //                points are [time, hp, phase, online, your lifetime damage]; fog is
+    //                [[start, end], ...]; end is the right edge (now, for the live one).
+    //   rowsFor(headHeight, lineHeight) -> how many rows tall.
+    var GRAPH_SHOW_KEY = "omhp.layout.graphShow";
+    var ZOOMS = [["ALL", 0], ["1H", 3600000], ["15M", 900000]];
 
-        var split = document.createElement("div");
-        split.id = "omhp-boss-split";
-        stage.insertAdjacentElement("beforebegin", split);
-        split.appendChild(stage);
-        var pane = document.createElement("div");
-        pane.id = "omhp-graph";
+    function makeGraph(pane, source, rowsFor) {
+        pane.classList.add("omhp-graph");
         var head = document.createElement("div");
-        head.id = "omhp-graph-head";
+        head.className = "omhp-graph-head";
         var headText = document.createElement("span");
         head.appendChild(headText);
-        // [REPLAY]: play the saved history back from the start over 10 seconds
+        var plot = document.createElement("pre");
+        plot.className = "omhp-graph-plot";
+        pane.appendChild(head);
+        pane.appendChild(plot);
+
+        // What the graph shows (legend toggles and the zoom range), shared and remembered
+        var show = Object.assign({ fill: true, heal: true, phase: true, online: true, mine: true, fog: true, range: 0 },
+            loadSaved(GRAPH_SHOW_KEY));
+
+        // [ALL] [1H] [15M]: how far back the graph reaches
+        var zoomBtns = ZOOMS.map(function(z) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-text omhp-zoom";
+            b.textContent = "[" + z[0] + "]";
+            b.title = z[1] ? "show the last " + dur(z[1] / 60000) : "show the whole fight";
+            b.addEventListener("click", function() {
+                show.range = z[1];
+                save(GRAPH_SHOW_KEY, show);
+                paintZoom();
+                draw();
+            });
+            head.appendChild(b);
+            return b;
+        });
+        function paintZoom() {
+            zoomBtns.forEach(function(b, i) { b.classList.toggle("on", (show.range || 0) === ZOOMS[i][1]); });
+        }
+        paintZoom();
+
+        // [REPLAY]: play the whole history back from the start over 10 seconds
         var replayBtn = document.createElement("button");
         replayBtn.type = "button";
         replayBtn.className = "btn-text omhp-replay";
         replayBtn.textContent = "[REPLAY]";
         replayBtn.title = "play this boss's HP history back from the start";
         head.appendChild(replayBtn);
-        var plot = document.createElement("pre");
-        plot.id = "omhp-graph-plot";
-        pane.appendChild(head);
-        pane.appendChild(plot);
-        split.appendChild(pane);
-        // The art sizes itself to its box on window resize; its box just got narrower
-        window.dispatchEvent(new Event("resize"));
-
-        var store = loadSaved(KEY);
-        // Histories saved before v0.15 may hold fake HP from the FOG event: start them over
-        if (store.v !== 2) store = {};
-        var boss = store.boss || null;
-        var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online, your lifetime damage]
-        var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
-        var maxHp = null;
-
-        var leading = false; // this tab records the history (see isLeader)
-
-        // What the graph shows; click a legend entry to switch it (remembered)
-        var SHOW_KEY = "omhp.layout.graphShow";
-        var show = Object.assign({ fill: true, heal: true, phase: true, online: true, mine: true, fog: true }, loadSaved(SHOW_KEY));
-
-        function persist() {
-            if (leading) save(KEY, { v: 2, boss: boss, s: points, f: fog });
-        }
-
-        // FOG is on: stretch the current fog span to now, or start a new one
-        function markFog() {
-            var now = Date.now();
-            var last = fog[fog.length - 1];
-            if (last && now - last[1] < 20000) last[1] = now;
-            else fog.push([now, now]);
-            if (fog.length > 200) fog.shift();
-        }
 
         var replayAt = null, replayTimer = null; // the moment the replay has reached
 
@@ -1370,12 +1462,13 @@
 
         replayBtn.addEventListener("click", function() {
             if (replayTimer) return stopReplay();
-            if (points.length < 2) return;
-            var start = points[0][0], end = Date.now(), began = Date.now();
+            var d = source();
+            if (d.points.length < 2) return;
+            var start = d.points[0][0], stop = d.end, began = Date.now();
             replayBtn.textContent = "[STOP]";
             replayTimer = setInterval(function() {
                 var k = Math.min(1, (Date.now() - began) / 10000);
-                replayAt = start + (end - start) * k;
+                replayAt = start + (stop - start) * k;
                 draw();
                 if (k >= 1) stopReplay();
             }, 80);
@@ -1385,10 +1478,10 @@
         // the time, HP, phase and players online there
         var view = null, hoverX = null;
         var cursor = document.createElement("div");
-        cursor.id = "omhp-graph-cursor";
+        cursor.className = "omhp-graph-cursor";
         cursor.hidden = true;
         var tip = document.createElement("div");
-        tip.id = "omhp-graph-tip";
+        tip.className = "omhp-graph-tip";
         tip.hidden = true;
         pane.appendChild(cursor);
         pane.appendChild(tip);
@@ -1412,10 +1505,10 @@
             cursor.hidden = false;
 
             var colEnd = view.t0 + view.span * (c + 1) / view.cols;
-            var t = view.fogCols[c] ? Math.min(colEnd, Date.now()) : Math.min(colEnd, view.lastT);
+            var t = view.fogCols[c] ? Math.min(colEnd, view.end) : Math.min(colEnd, view.lastT);
             var hp = view.vals[c];
             var lines = [
-                new Date(t).toTimeString().slice(0, 5),
+                hhmm(t),
                 fmt(hp) + " HP (" + (hp / view.max * 100).toFixed(1) + "%)" + (view.fogCols[c] ? " last seen" : "")
             ];
             if (view.phases[c]) lines.push("PHASE " + ROMAN[view.phases[c]]);
@@ -1443,41 +1536,9 @@
             if (!entry) return;
             var k = entry.dataset.series;
             show[k] = !show[k];
-            save(SHOW_KEY, show);
+            save(GRAPH_SHOW_KEY, show);
             draw();
         });
-
-        function sample() {
-            // FOG hides the boss's HP on purpose: record only that it's on (the line carries
-            // the last real value across, shaded, and the change shows once it clears)
-            if (fogged()) {
-                leading = isLeader();
-                if (leading) markFog();
-                if (!document.hidden) draw();
-                return;
-            }
-            var b = trueBoss();
-            if (!b) return;
-            if (b.max) maxHp = b.max;
-            leading = isLeader();
-            // Another tab records; its saves arrive through the storage event below
-            if (!leading) {
-                if (!document.hidden) draw();
-                return;
-            }
-            var num = String(b.seq);
-            if (num !== boss) {
-                boss = num;
-                points = [];
-                fog = [];
-            }
-            var me = myTotals();
-            points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
-            // Long fights: thin out the older half instead of dropping the start
-            points = thinPoints(points, MAX_POINTS);
-            // Keep recording in a background tab, but only draw what can be seen
-            if (!document.hidden) draw();
-        }
 
         // Character size of the plot's font, measured again when the pane resizes
         var cw = null, lineH = null;
@@ -1501,10 +1562,10 @@
         }
 
         function draw() {
-            var max = maxHp || numberIn(hpMax) || Math.max.apply(null, points.map(function(p) { return p[1]; }).concat([1]));
+            var d = source();
+            var points = d.points, fog = d.fog, max = d.max || 1;
             if (cw === null) measure();
-            // As tall as the art beside it, less the heading and the time axis
-            var rows = Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - head.offsetHeight - 3 * lineH) / lineH)));
+            var rows = rowsFor(head.offsetHeight, lineH);
             var LABEL = 5;
             // A right-hand axis for the players-online (*) and your-damage (+) scales, when
             // there's any of either: "|" then up to 4 characters for each
@@ -1519,7 +1580,10 @@
                 return;
             }
 
-            var t0 = points[0][0], t1 = Date.now();
+            // The whole fight, or (zoomed, and not replaying) only its last `range` ms
+            var t1 = d.end, first = points[0][0];
+            var zoomed = !!show.range && replayAt === null && t1 - first > show.range;
+            var t0 = zoomed ? t1 - show.range : first;
             var span = Math.max(1, t1 - t0);
             // During [REPLAY], nothing after the moment it has reached
             var cutoff = replayAt === null ? Infinity : replayAt;
@@ -1659,7 +1723,7 @@
                 frag.appendChild(document.createTextNode("\n"));
             }
             frag.appendChild(document.createTextNode(" ".repeat(LABEL) + "+" + "-".repeat(cols) + (RIGHT ? "+" : "") + "\n"));
-            var left = "-" + ago(span), right = "now";
+            var left = "-" + ago(span), right = d.endLabel || "now";
             frag.appendChild(document.createTextNode(" ".repeat(LABEL + 1) + left +
                 " ".repeat(Math.max(1, cols - left.length - right.length)) + right + "\n"));
             // Legend: [series it switches (or null), colour class, mark, label]. Click an entry
@@ -1679,25 +1743,217 @@
                             (item[0] === "online" || item[0] === "mine" ? " (scale on the right)" : "");
                         if (!on) entry.className = "omhp-legend-off";
                     }
-                    var mark = document.createElement("span");
-                    if (on) mark.className = item[1];
-                    mark.textContent = item[2];
-                    entry.appendChild(mark);
+                    var markEl = document.createElement("span");
+                    if (on) markEl.className = item[1];
+                    markEl.textContent = item[2];
+                    entry.appendChild(markEl);
                     entry.appendChild(document.createTextNode(" " + item[3]));
                     frag.appendChild(entry);
                 });
             plot.replaceChildren(frag);
             // What this render shows, for the hover readout
             view = {
-                t0: t0, span: span, cols: cols, label: LABEL, rows: rows, cw: cw, lineH: lineH, max: max,
-                vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols, lastT: Math.min(cutoff, points[points.length - 1][0])
+                t0: t0, span: span, cols: cols, label: LABEL, rows: rows, cw: cw, lineH: lineH, max: max, end: t1,
+                vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols,
+                lastT: Math.min(cutoff, points[points.length - 1][0])
             };
             if (hoverX !== null) showHover(hoverX);
 
-            var since = new Date(t0).toTimeString().slice(0, 5);
-            headText.textContent = replayAt !== null ? "REPLAY · " + new Date(replayAt).toTimeString().slice(0, 5) + " · " + ago(replayAt - t0) + " in"
-                : fogged() ? "HP · FOG — PAUSED" : "HP SINCE " + since + " · " + ago(span);
-            head.title = "boss #" + boss + "'s HP since you first saw it";
+            headText.textContent = replayAt !== null ? "REPLAY · " + hhmm(replayAt) + " · " + ago(replayAt - first) + " in"
+                : d.label(t0, span, zoomed);
+            head.title = d.title || "";
+        }
+
+        new ResizeObserver(function() {
+            measure();
+            draw();
+        }).observe(pane);
+
+        return { draw: draw };
+    }
+
+    // The highest HP in a history, for one with no max saved
+    function maxHpOf(points) {
+        return Math.max.apply(null, points.map(function(p) { return p[1]; }).concat([1]));
+    }
+
+    // Old fights for BOSSES' [GRAPH]: each boss's history when the next one arrived, thinned
+    // to 300 points, for the last 20 bosses
+    var GRAPHS_KEY = "omhp.bossgraphs";
+
+    function archiveGraph(seq, points, fog, max) {
+        if (points.length < 2) return;
+        var all = loadSaved(GRAPHS_KEY);
+        all[seq] = { s: shrinkPoints(points, 300), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
+        var out = {};
+        Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, 20).forEach(function(k) { out[k] = all[k]; });
+        save(GRAPHS_KEY, out);
+        document.dispatchEvent(new CustomEvent("omhp-graphs")); // BOSSES shows its [GRAPH]
+    }
+
+    // An old fight's graph in a floating window you can drag and resize (click [GRAPH] again,
+    // or [CLOSE], to close it)
+    var graphWins = {};
+
+    function openBossGraph(seq, name) {
+        if (graphWins[seq]) {
+            graphWins[seq].remove();
+            delete graphWins[seq];
+            return;
+        }
+        var saved = loadSaved(GRAPHS_KEY)[seq];
+        if (!saved || !saved.s || saved.s.length < 2) return;
+        var win = document.createElement("div");
+        win.className = "omhp-float omhp-graph-win";
+        var bar = document.createElement("div");
+        bar.className = "omhp-float-bar";
+        var title = document.createElement("span");
+        title.textContent = "BOSS #" + seq + (name ? " " + name : "");
+        var close = document.createElement("button");
+        close.type = "button";
+        close.className = "btn-text";
+        close.textContent = "[CLOSE]";
+        close.addEventListener("click", function() { openBossGraph(seq); });
+        bar.appendChild(title);
+        bar.appendChild(close);
+        var body = document.createElement("div");
+        body.className = "omhp-float-body";
+        var pane = document.createElement("div");
+        body.appendChild(pane);
+        win.appendChild(bar);
+        win.appendChild(body);
+        var count = Object.keys(graphWins).length;
+        var w = Math.min(680, window.innerWidth - 20);
+        win.style.width = w + "px";
+        win.style.height = Math.min(400, window.innerHeight - 40) + "px";
+        win.style.left = Math.max(0, (window.innerWidth - w) / 2 + count * 30) + "px";
+        win.style.top = 60 + count * 30 + "px";
+        win.style.zIndex = "90";
+        document.body.appendChild(win);
+        graphWins[seq] = win;
+
+        // Drag the title bar to move it
+        var drag = null;
+        bar.addEventListener("pointerdown", function(e) {
+            if (e.button !== 0 || e.target !== bar && e.target !== title) return;
+            e.preventDefault();
+            bar.setPointerCapture(e.pointerId);
+            var r = win.getBoundingClientRect();
+            drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+        });
+        bar.addEventListener("pointermove", function(e) {
+            if (!drag) return;
+            win.style.left = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - 80)) + "px";
+            win.style.top = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 30)) + "px";
+        });
+        bar.addEventListener("pointerup", function() { drag = null; });
+        bar.addEventListener("pointercancel", function() { drag = null; });
+
+        var points = saved.s, end = saved.end || points[points.length - 1][0];
+        makeGraph(pane, function() {
+            return {
+                points: points, fog: saved.f || [], max: saved.max || maxHpOf(points), end: end, endLabel: hhmm(end),
+                label: function(t0, span, zoomed) {
+                    return (zoomed ? "LAST " : "HP FROM " + hhmm(points[0][0]) + " · ") + dur(span / 60000);
+                },
+                title: "boss #" + seq + "'s HP while you watched it"
+            };
+        }, function(headH, lineH) {
+            return Math.max(8, Math.min(40, Math.floor((pane.clientHeight - headH - 3 * lineH) / lineH)));
+        });
+    }
+
+    // Split the boss area: the ASCII art on the left, the live HP graph on the right covering
+    // the boss's whole life since you first saw it (kept across reloads).
+    function bossGraph() {
+        var stage = document.getElementById("boss-stage");
+        var hpNow = document.getElementById("hp-now");
+        var hpMax = document.getElementById("hp-max");
+        if (!stage || !hpNow) return false;
+        var KEY = "omhp.layout.hp";
+        var MAX_POINTS = 3000;
+
+        var split = document.createElement("div");
+        split.id = "omhp-boss-split";
+        stage.insertAdjacentElement("beforebegin", split);
+        split.appendChild(stage);
+        var pane = document.createElement("div");
+        pane.id = "omhp-graph";
+        split.appendChild(pane);
+        // The art sizes itself to its box on window resize; its box just got narrower
+        window.dispatchEvent(new Event("resize"));
+
+        var store = loadSaved(KEY);
+        // Histories saved before v0.15 may hold fake HP from the FOG event: start them over
+        if (store.v !== 2) store = {};
+        var boss = store.boss || null;
+        var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online, your lifetime damage]
+        var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
+        var maxHp = null;
+
+        var leading = false; // this tab records the history (see isLeader)
+
+        function persist() {
+            if (leading) save(KEY, { v: 2, boss: boss, s: points, f: fog });
+        }
+
+        // FOG is on: stretch the current fog span to now, or start a new one
+        function markFog() {
+            var now = Date.now();
+            var last = fog[fog.length - 1];
+            if (last && now - last[1] < 20000) last[1] = now;
+            else fog.push([now, now]);
+            if (fog.length > 200) fog.shift();
+        }
+
+        var graph = makeGraph(pane, function() {
+            return {
+                points: points, fog: fog, end: Date.now(),
+                max: maxHp || numberIn(hpMax) || maxHpOf(points),
+                label: function(t0, span, zoomed) {
+                    if (fogged()) return "HP · FOG — PAUSED";
+                    return zoomed ? "HP · LAST " + dur(span / 60000) : "HP SINCE " + hhmm(t0) + " · " + dur(span / 60000);
+                },
+                title: "boss #" + boss + "'s HP since you first saw it"
+            };
+        }, function(headH, lineH) {
+            // As tall as the art beside it, less the heading and the time axis
+            return Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - headH - 3 * lineH) / lineH)));
+        });
+
+        function sample() {
+            // FOG hides the boss's HP on purpose: record only that it's on (the line carries
+            // the last real value across, shaded, and the change shows once it clears)
+            if (fogged()) {
+                leading = isLeader();
+                if (leading) markFog();
+                if (!document.hidden) graph.draw();
+                return;
+            }
+            var b = trueBoss();
+            if (!b) return;
+            leading = isLeader();
+            // Another tab records; its saves arrive through the storage event below
+            if (!leading) {
+                if (b.max) maxHp = b.max;
+                if (!document.hidden) graph.draw();
+                return;
+            }
+            var num = String(b.seq);
+            if (num !== boss) {
+                // A new boss: keep the last one's fight for BOSSES' [GRAPH], then start over
+                if (boss !== null) archiveGraph(boss, points, fog, maxHp);
+                boss = num;
+                points = [];
+                fog = [];
+            }
+            if (b.max) maxHp = b.max;
+            var me = myTotals();
+            points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
+            // Long fights: thin out the older half instead of dropping the start
+            points = thinPoints(points, MAX_POINTS);
+            // Keep recording in a background tab, but only draw what can be seen
+            if (!document.hidden) graph.draw();
         }
 
         sample();
@@ -1711,17 +1967,12 @@
             boss = saved.boss || null;
             points = Array.isArray(saved.s) ? saved.s : [];
             fog = Array.isArray(saved.f) ? saved.f : [];
-            if (!document.hidden) draw();
+            if (!document.hidden) graph.draw();
         });
-        new ResizeObserver(function() {
-            measure();
-            draw();
-        }).observe(pane);
         document.addEventListener("visibilitychange", function() {
-            if (!document.hidden) draw();
+            if (!document.hidden) graph.draw();
         });
     }
-
     // In FIGHT, under YOUR DMG ON THIS BOSS: your share of everyone's damage on this boss.
     function damageShare() {
         var mine = document.getElementById("boss-dmg");
@@ -1747,28 +1998,44 @@
         paint();
     }
 
-    // In FIGHT: your damage today, damage per hour while the game was open, best hit, average
-    // hit, crit rate. Kept across reloads and shared by open tabs until [RESET] or a new day
-    // (earlier days go to [DAYS]). Counted from your lifetime totals in the site's data:
-    // today = the totals now, minus the first reading today.
+    // SESSION, a box of its own under FIGHT: your damage today, damage per hour while the game
+    // was open, best and average hit, crit rate, attacks, shards earned and spent. Kept across
+    // reloads and shared by open tabs until [RESET] or a new day (earlier days go to [DAYS]).
+    // Counted from your lifetime totals in the site's data: today = the totals now, minus the
+    // first reading today.
     function sessionStats() {
         var bossDmg = document.getElementById("boss-dmg");
         var lastHit = document.getElementById("last-hit");
-        var box = document.querySelector(".lasthit");
-        if (!bossDmg || !box) return false;
+        var fight = document.getElementById("fight");
+        if (!bossDmg || !fight) return false;
         var KEY = "omhp.session";
-        var line = document.createElement("div");
-        line.id = "omhp-session";
-        box.appendChild(line);
+        var panel = document.createElement("div");
+        panel.className = "box omhp-session-box";
+        var title = document.createElement("div");
+        title.className = "box-title";
+        title.textContent = "SESSION";
+        var grid = document.createElement("div");
+        grid.id = "omhp-session";
+        grid.className = "omhp-sess-grid";
+        var tools = document.createElement("div");
+        tools.className = "omhp-sess-tools";
         var daysBox = document.createElement("div");
         daysBox.id = "omhp-days";
         daysBox.hidden = true;
-        box.appendChild(daysBox);
+        panel.appendChild(title);
+        panel.appendChild(grid);
+        panel.appendChild(tools);
+        panel.appendChild(daysBox);
+        fight.insertAdjacentElement("afterend", panel);
 
         // base: the totals at the first reading today; last: the latest reading; extra: what
-        // was counted from the screen while the site's data wasn't available
+        // was counted from the screen while the site's data wasn't available; shards: what
+        // your balance went up (earned) and down (spent) by, and the balance last seen
         function fresh() {
-            return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0, sizes: [] };
+            return {
+                v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0,
+                activeMs: 0, seen: 0, sizes: [], shards: { earned: 0, spent: 0, last: null }
+            };
         }
 
         // The stored session; a new day starts it over and files the old one under DAYS
@@ -1780,10 +2047,18 @@
                     best: s.best || 0, activeMs: s.activeMs || 0, seen: 0 };
             }
             if (s.v !== 2) s = fresh();
+            if (!s.shards) s.shards = { earned: 0, spent: 0, last: null }; // saved before v0.27
             if (s.day !== today()) {
                 var c = sessionCounts(s, s.last);
-                if (c.dmg) archiveDay(s.day, "session", { dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs });
+                if (c.dmg || s.shards.earned || s.shards.spent) {
+                    archiveDay(s.day, "session", {
+                        dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs,
+                        earned: s.shards.earned, spent: s.shards.spent
+                    });
+                }
+                var keep = s.shards.last; // today's changes count from the balance we last saw
                 s = fresh();
+                s.shards.last = keep;
                 save(KEY, s);
             }
             return s;
@@ -1817,6 +2092,7 @@
                 Object.assign(s, fresh());
                 s.base = t;
                 s.last = t;
+                s.shards.last = t && typeof t.shards === "number" ? t.shards : null;
             });
             myLast = Date.now();
         });
@@ -1826,27 +2102,43 @@
         });
         daysBtn.textContent = "[DAYS]";
 
-        function val(text) {
-            var s = document.createElement("span");
-            s.className = "val";
-            s.textContent = text;
-            return s;
+        tools.appendChild(daysBtn);
+        tools.appendChild(reset);
+
+        // One label / value cell of the grid
+        function cell(label, value, tip) {
+            var c = document.createElement("div");
+            c.className = "omhp-sess-cell";
+            if (tip) c.title = tip;
+            var k = document.createElement("span");
+            k.className = "k";
+            k.textContent = label;
+            var v = document.createElement("span");
+            v.className = "v";
+            v.textContent = value;
+            c.appendChild(k);
+            c.appendChild(v);
+            return c;
         }
 
         function paint() {
             var s = load();
             var c = sessionCounts(s, myTotals() || s.last);
-            var parts = ["SESSION ", val(fmt(c.dmg) + " DMG")];
             var hours = s.activeMs / 3600000;
-            if (hours >= 1 / 60) parts.push(" · ", val(fmt(c.dmg / hours) + "/HR"));
-            if (s.best) parts.push(" · BEST ", val(fmt(s.best)));
-            if (c.hits > 0) {
-                parts.push(" · AVG ", val(fmt(c.dmg / c.hits)));
-                parts.push(" · ", val(Math.round(c.crits / c.hits * 100) + "%"), " CRIT");
-            }
-            parts.push(daysBtn, reset);
-            line.replaceChildren.apply(line, parts);
-            line.title = spread(s.sizes || []);
+            var timed = hours >= 1 / 60;
+            var cells = [
+                cell("DAMAGE", fmt(c.dmg)),
+                cell("PER HOUR", timed ? fmt(c.dmg / hours) : "--", "damage per hour of play today"),
+                cell("ATTACKS", fmt(c.hits)),
+                cell("BEST HIT", s.best ? fmt(s.best) : "--"),
+                cell("AVG HIT", c.hits > 0 ? fmt(c.dmg / c.hits) : "--", spread(s.sizes || [])),
+                cell("CRIT", c.hits > 0 ? Math.round(c.crits / c.hits * 100) + "%" : "--"),
+                cell("SHARDS", "+" + fmt(s.shards.earned) + (s.shards.spent ? " / −" + fmt(s.shards.spent) : ""),
+                    "shards your balance went up by today (and down by, from spending)"),
+                cell("SHARDS/HR", timed ? fmt(s.shards.earned / hours) : "--", "shards earned per hour of play today"),
+                cell("PLAYED", dur(s.activeMs / 60000), "time today with the game open")
+            ];
+            grid.replaceChildren.apply(grid, cells);
         }
 
         // SESSION's tooltip: the size of your last (up to 200) hits, smallest to biggest
@@ -1866,7 +2158,7 @@
                 daysBox.textContent = "no earlier days yet";
                 return;
             }
-            var lines = ["DAY      DMG    /HR  HITS CRIT  IDLE  LOOT"];
+            var lines = ["DAY      DMG    /HR  HITS CRIT  IDLE SHARDS  LOOT"];
             dates.forEach(function(d) {
                 var x = all[d].session || {}, l = (all[d].loot || {}).counts || {};
                 var hrs = (x.activeMs || 0) / 3600000;
@@ -1875,7 +2167,8 @@
                     (hrs >= 1 / 60 ? short(Math.round((x.dmg || 0) / hrs)) : "-").padStart(6) + " " +
                     String(x.hits || 0).padStart(5) + " " +
                     (x.hits ? Math.round(x.crits / x.hits * 100) + "%" : "-").padStart(4) + " " +
-                    (all[d].idle ? dur(all[d].idle.ms / 60000) : "-").padStart(5) + "  " + loot);
+                    (all[d].idle ? dur(all[d].idle.ms / 60000) : "-").padStart(5) + " " +
+                    (x.earned ? "+" + short(x.earned) : "-").padStart(6) + "  " + loot);
             });
             daysBox.textContent = lines.join("\n");
         }
@@ -1914,6 +2207,14 @@
                 // First reading today, or the totals went backwards (another account?): count from here
                 if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
                 s.last = t;
+                // Shards: only the leader counts changes in the balance, so two tabs don't
+                // count the same one twice
+                if (typeof t.shards === "number" && isLeader()) {
+                    var d = s.shards.last === null ? 0 : t.shards - s.shards.last;
+                    if (d > 0) s.shards.earned += d;
+                    else if (d < 0) s.shards.spent -= d;
+                    s.shards.last = t.shards;
+                }
             });
         }
 
@@ -2309,6 +2610,86 @@
             redraw();
         });
 
+        // [CHESTS]: what your box openings gave, per box, next to the site's stated odds.
+        // Counted by the leader tab from your single opens; OPEN ALL only says how many.
+        var CHESTS_KEY = "omhp.chests";
+        var chestBox = document.createElement("div");
+        chestBox.className = "omhp-chests";
+        chestBox.hidden = true;
+        panel.insertBefore(chestBox, list);
+        var chestsBtn = resetButton("what your chests gave you, against the stated odds", function() {
+            chestBox.hidden = !chestBox.hidden;
+            if (!chestBox.hidden) paintChests();
+        });
+        chestsBtn.textContent = "[CHESTS]";
+
+        document.addEventListener("omhp-unbox", function(e) {
+            if (!isLeader()) return;
+            var x;
+            try { x = JSON.parse(e.detail); } catch (err) { return; }
+            var all = loadSaved(CHESTS_KEY);
+            var id = x.box || "?";
+            var c = all[id] = all[id] || { opened: 0, bulk: 0, out: {} };
+            if (x.bulk) c.bulk += x.count || 0;
+            else {
+                c.opened++;
+                var k = outcomeKey(x.reward, x.rarity, x.amount);
+                c.out[k] = (c.out[k] || 0) + 1;
+            }
+            save(CHESTS_KEY, all);
+            if (!chestBox.hidden) paintChests();
+        });
+
+        function paintChests() {
+            var all = loadSaved(CHESTS_KEY), stated = {};
+            var bridge = document.getElementById("omhp-boss-data");
+            try { stated = JSON.parse((bridge && bridge.dataset.boxStated) || "{}"); } catch (e) { /* none */ }
+            // Boxes in the site's order, then any it doesn't list
+            var ids = Object.keys(stated).filter(function(id) { return all[id]; })
+                .concat(Object.keys(all).filter(function(id) { return !stated[id]; }));
+            chestBox.replaceChildren();
+            var head = document.createElement("div");
+            head.className = "omhp-chests-head";
+            head.textContent = ids.length ? "OBSERVED vs STATED, from your single opens" : "no chests opened yet (open one from BAG)";
+            if (ids.length) {
+                head.appendChild(resetButton("clear the chest ledger", function() {
+                    save(CHESTS_KEY, {});
+                    paintChests();
+                }));
+            }
+            chestBox.appendChild(head);
+            ids.forEach(function(id) {
+                var c = all[id], s = stated[id] || { name: id === "?" ? "UNKNOWN BOX" : id, odds: [] };
+                var title = document.createElement("div");
+                title.className = "omhp-chests-box";
+                title.textContent = (s.name || id).toUpperCase() + " · opened " + fmt(c.opened) +
+                    (c.bulk ? " (+" + fmt(c.bulk) + " in bulk: the feed doesn't list what came out)" : "");
+                chestBox.appendChild(title);
+                // Every stated outcome, then anything seen that the odds don't list
+                var keys = s.odds.map(function(o) { return o[0]; });
+                Object.keys(c.out).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
+                keys.forEach(function(k) {
+                    var odd = s.odds.filter(function(o) { return o[0] === k; })[0];
+                    var n = c.out[k] || 0;
+                    var rowEl = document.createElement("div");
+                    rowEl.className = "omhp-chests-row";
+                    var name = document.createElement("span");
+                    name.className = RARITIES.indexOf(k) !== -1 ? "r-" + k : "";
+                    name.textContent = outcomeLabel(k);
+                    var seen = document.createElement("span");
+                    seen.className = "v";
+                    seen.textContent = (c.opened ? pct(n / c.opened) : "--") + " (" + fmt(n) + ")";
+                    var want = document.createElement("span");
+                    want.className = "dim";
+                    want.textContent = odd ? "stated " + pct(odd[1]) : "not listed";
+                    rowEl.appendChild(name);
+                    rowEl.appendChild(seen);
+                    rowEl.appendChild(want);
+                    chestBox.appendChild(rowEl);
+                });
+            });
+        }
+
         // "RARE x12 1.2%": count today, and drops per 100 attacks today. The tooltip has
         // the rates over the last 30 days too.
         function paintSummary(st) {
@@ -2331,6 +2712,7 @@
                     summary.appendChild(r);
                 }
             });
+            summary.appendChild(chestsBtn);
             if (keys.length) summary.appendChild(reset);
             summary.title = ratesTitle(st, hits);
         }
@@ -2430,6 +2812,7 @@
         // Another tab added something (or reset it)
         window.addEventListener("storage", function(e) {
             if (e.key === KEY) redraw();
+            if (e.key === CHESTS_KEY && !chestBox.hidden) paintChests();
         });
         // The rates move with every attack, not only with loot
         every(30000, function() { paintSummary(load()); }, { visible: true });
@@ -2454,7 +2837,7 @@
         panel.hidden = true;
         document.body.appendChild(panel);
 
-        function render(x) {
+        function render(x, graphs) {
             var li = document.createElement("li");
             var t = document.createElement("span");
             t.className = "t";
@@ -2471,6 +2854,11 @@
             if (x.peak) bits.push("PEAK " + x.peak);
             if (x.healed > 0) bits.push("HEALED " + short(x.healed));
             m.appendChild(document.createTextNode(" · " + bits.join(" · ")));
+            if (graphs[x.seq]) {
+                var g = resetButton("this boss's HP graph, in a window", function() { openBossGraph(x.seq, x.name); });
+                g.textContent = "[GRAPH]";
+                m.appendChild(g);
+            }
             li.appendChild(m);
             li.title = new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
                 (x.killed ? "" : "\n(you weren't watching when it ended)");
@@ -2484,7 +2872,10 @@
                 li.className = "dim";
                 li.textContent = "bosses you see are listed here once they're gone";
                 list.replaceChildren(li);
-            } else list.replaceChildren.apply(list, all.map(render));
+            } else {
+                var graphs = loadSaved(GRAPHS_KEY);
+                list.replaceChildren.apply(list, all.map(function(x) { return render(x, graphs); }));
+            }
         }
 
         function sample() {
@@ -2515,8 +2906,9 @@
         }
 
         window.addEventListener("storage", function(e) {
-            if (e.key === KEY) redraw();
+            if (e.key === KEY || e.key === GRAPHS_KEY) redraw();
         });
+        document.addEventListener("omhp-graphs", redraw); // this tab kept a fight (graph.js)
         redraw();
         sample();
         every(5000, sample);

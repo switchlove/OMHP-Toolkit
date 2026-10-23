@@ -100,6 +100,35 @@ test("thinPoints keeps the recent half whole", () => {
     same(lib.thinPoints(pts, 8).map((p) => p[0]), [0, 2, 4, 5, 6, 7, 8, 9]);
 });
 
+test("pct", () => {
+    assert.equal(lib.pct(0.48), "48%");
+    assert.equal(lib.pct(0.096), "9.6%");
+    assert.equal(lib.pct(0.0012), "0.12%");
+    assert.equal(lib.pct(0.0000001), "<0.001%");
+    assert.equal(lib.pct(0), "0%");
+    assert.equal(lib.pct(1), "100%");
+});
+
+test("outcomeKey and outcomeLabel", () => {
+    assert.equal(lib.outcomeKey("item", "legendary"), "legendary");
+    assert.equal(lib.outcomeKey("attacks", null, 5), "attacks:5");
+    assert.equal(lib.outcomeKey("ultimate"), "ultimate");
+    assert.equal(lib.outcomeLabel("legendary"), "LEGENDARY");
+    assert.equal(lib.outcomeLabel("boss_unique"), "BOSS UNIQUE");
+    assert.equal(lib.outcomeLabel("attacks:1"), "+1 ATTACK");
+    assert.equal(lib.outcomeLabel("next_crit:2"), "2 CRIT CHARGES");
+});
+
+test("hhmm", () => {
+    assert.equal(lib.hhmm(new Date(2026, 0, 5, 9, 7).getTime()), "09:07");
+});
+
+test("shrinkPoints keeps the first and last, evenly spread", () => {
+    const pts = Array.from({ length: 11 }, (_, i) => [i]);
+    same(lib.shrinkPoints(pts, 3).map((p) => p[0]), [0, 5, 10]);
+    same(lib.shrinkPoints(pts, 20).map((p) => p[0]), pts.map((p) => p[0]));
+});
+
 test("bucketColumns: carries values forward, your damage per column, fog", () => {
     // [time, hp, phase, online, your lifetime damage]
     const pts = [[0, 100, 1, 5, 1000], [10, 90, 1, 6, 1010], [30, 70, 2, 7, 1050]];

@@ -23,28 +23,44 @@ function damageShare() {
     paint();
 }
 
-// In FIGHT: your damage today, damage per hour while the game was open, best hit, average
-// hit, crit rate. Kept across reloads and shared by open tabs until [RESET] or a new day
-// (earlier days go to [DAYS]). Counted from your lifetime totals in the site's data:
-// today = the totals now, minus the first reading today.
+// SESSION, a box of its own under FIGHT: your damage today, damage per hour while the game
+// was open, best and average hit, crit rate, attacks, shards earned and spent. Kept across
+// reloads and shared by open tabs until [RESET] or a new day (earlier days go to [DAYS]).
+// Counted from your lifetime totals in the site's data: today = the totals now, minus the
+// first reading today.
 function sessionStats() {
     var bossDmg = document.getElementById("boss-dmg");
     var lastHit = document.getElementById("last-hit");
-    var box = document.querySelector(".lasthit");
-    if (!bossDmg || !box) return false;
+    var fight = document.getElementById("fight");
+    if (!bossDmg || !fight) return false;
     var KEY = "omhp.session";
-    var line = document.createElement("div");
-    line.id = "omhp-session";
-    box.appendChild(line);
+    var panel = document.createElement("div");
+    panel.className = "box omhp-session-box";
+    var title = document.createElement("div");
+    title.className = "box-title";
+    title.textContent = "SESSION";
+    var grid = document.createElement("div");
+    grid.id = "omhp-session";
+    grid.className = "omhp-sess-grid";
+    var tools = document.createElement("div");
+    tools.className = "omhp-sess-tools";
     var daysBox = document.createElement("div");
     daysBox.id = "omhp-days";
     daysBox.hidden = true;
-    box.appendChild(daysBox);
+    panel.appendChild(title);
+    panel.appendChild(grid);
+    panel.appendChild(tools);
+    panel.appendChild(daysBox);
+    fight.insertAdjacentElement("afterend", panel);
 
     // base: the totals at the first reading today; last: the latest reading; extra: what
-    // was counted from the screen while the site's data wasn't available
+    // was counted from the screen while the site's data wasn't available; shards: what
+    // your balance went up (earned) and down (spent) by, and the balance last seen
     function fresh() {
-        return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0, sizes: [] };
+        return {
+            v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0,
+            activeMs: 0, seen: 0, sizes: [], shards: { earned: 0, spent: 0, last: null }
+        };
     }
 
     // The stored session; a new day starts it over and files the old one under DAYS
@@ -56,10 +72,18 @@ function sessionStats() {
                 best: s.best || 0, activeMs: s.activeMs || 0, seen: 0 };
         }
         if (s.v !== 2) s = fresh();
+        if (!s.shards) s.shards = { earned: 0, spent: 0, last: null }; // saved before v0.27
         if (s.day !== today()) {
             var c = sessionCounts(s, s.last);
-            if (c.dmg) archiveDay(s.day, "session", { dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs });
+            if (c.dmg || s.shards.earned || s.shards.spent) {
+                archiveDay(s.day, "session", {
+                    dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs,
+                    earned: s.shards.earned, spent: s.shards.spent
+                });
+            }
+            var keep = s.shards.last; // today's changes count from the balance we last saw
             s = fresh();
+            s.shards.last = keep;
             save(KEY, s);
         }
         return s;
@@ -93,6 +117,7 @@ function sessionStats() {
             Object.assign(s, fresh());
             s.base = t;
             s.last = t;
+            s.shards.last = t && typeof t.shards === "number" ? t.shards : null;
         });
         myLast = Date.now();
     });
@@ -102,27 +127,43 @@ function sessionStats() {
     });
     daysBtn.textContent = "[DAYS]";
 
-    function val(text) {
-        var s = document.createElement("span");
-        s.className = "val";
-        s.textContent = text;
-        return s;
+    tools.appendChild(daysBtn);
+    tools.appendChild(reset);
+
+    // One label / value cell of the grid
+    function cell(label, value, tip) {
+        var c = document.createElement("div");
+        c.className = "omhp-sess-cell";
+        if (tip) c.title = tip;
+        var k = document.createElement("span");
+        k.className = "k";
+        k.textContent = label;
+        var v = document.createElement("span");
+        v.className = "v";
+        v.textContent = value;
+        c.appendChild(k);
+        c.appendChild(v);
+        return c;
     }
 
     function paint() {
         var s = load();
         var c = sessionCounts(s, myTotals() || s.last);
-        var parts = ["SESSION ", val(fmt(c.dmg) + " DMG")];
         var hours = s.activeMs / 3600000;
-        if (hours >= 1 / 60) parts.push(" · ", val(fmt(c.dmg / hours) + "/HR"));
-        if (s.best) parts.push(" · BEST ", val(fmt(s.best)));
-        if (c.hits > 0) {
-            parts.push(" · AVG ", val(fmt(c.dmg / c.hits)));
-            parts.push(" · ", val(Math.round(c.crits / c.hits * 100) + "%"), " CRIT");
-        }
-        parts.push(daysBtn, reset);
-        line.replaceChildren.apply(line, parts);
-        line.title = spread(s.sizes || []);
+        var timed = hours >= 1 / 60;
+        var cells = [
+            cell("DAMAGE", fmt(c.dmg)),
+            cell("PER HOUR", timed ? fmt(c.dmg / hours) : "--", "damage per hour of play today"),
+            cell("ATTACKS", fmt(c.hits)),
+            cell("BEST HIT", s.best ? fmt(s.best) : "--"),
+            cell("AVG HIT", c.hits > 0 ? fmt(c.dmg / c.hits) : "--", spread(s.sizes || [])),
+            cell("CRIT", c.hits > 0 ? Math.round(c.crits / c.hits * 100) + "%" : "--"),
+            cell("SHARDS", "+" + fmt(s.shards.earned) + (s.shards.spent ? " / −" + fmt(s.shards.spent) : ""),
+                "shards your balance went up by today (and down by, from spending)"),
+            cell("SHARDS/HR", timed ? fmt(s.shards.earned / hours) : "--", "shards earned per hour of play today"),
+            cell("PLAYED", dur(s.activeMs / 60000), "time today with the game open")
+        ];
+        grid.replaceChildren.apply(grid, cells);
     }
 
     // SESSION's tooltip: the size of your last (up to 200) hits, smallest to biggest
@@ -142,7 +183,7 @@ function sessionStats() {
             daysBox.textContent = "no earlier days yet";
             return;
         }
-        var lines = ["DAY      DMG    /HR  HITS CRIT  IDLE  LOOT"];
+        var lines = ["DAY      DMG    /HR  HITS CRIT  IDLE SHARDS  LOOT"];
         dates.forEach(function(d) {
             var x = all[d].session || {}, l = (all[d].loot || {}).counts || {};
             var hrs = (x.activeMs || 0) / 3600000;
@@ -151,7 +192,8 @@ function sessionStats() {
                 (hrs >= 1 / 60 ? short(Math.round((x.dmg || 0) / hrs)) : "-").padStart(6) + " " +
                 String(x.hits || 0).padStart(5) + " " +
                 (x.hits ? Math.round(x.crits / x.hits * 100) + "%" : "-").padStart(4) + " " +
-                (all[d].idle ? dur(all[d].idle.ms / 60000) : "-").padStart(5) + "  " + loot);
+                (all[d].idle ? dur(all[d].idle.ms / 60000) : "-").padStart(5) + " " +
+                (x.earned ? "+" + short(x.earned) : "-").padStart(6) + "  " + loot);
         });
         daysBox.textContent = lines.join("\n");
     }
@@ -190,6 +232,14 @@ function sessionStats() {
             // First reading today, or the totals went backwards (another account?): count from here
             if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
             s.last = t;
+            // Shards: only the leader counts changes in the balance, so two tabs don't
+            // count the same one twice
+            if (typeof t.shards === "number" && isLeader()) {
+                var d = s.shards.last === null ? 0 : t.shards - s.shards.last;
+                if (d > 0) s.shards.earned += d;
+                else if (d < 0) s.shards.spent -= d;
+                s.shards.last = t.shards;
+            }
         });
     }
 

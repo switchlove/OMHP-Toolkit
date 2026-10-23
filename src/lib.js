@@ -24,6 +24,11 @@ function today(d) {
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// A time as "14:32"
+function hhmm(t) {
+    return new Date(t).toTimeString().slice(0, 5);
+}
+
 // The tab title with our part ("[72% ~39m]", "[FOG]", or "" for none) after the site's
 // attack count: "(3/5) ONE MILLION HP" -> "(3/5) [72% ~39m] ONE MILLION HP". A title a
 // world event is flashing ("(!) ...") is left as it is.
@@ -50,6 +55,33 @@ function sessionCounts(s, t) {
 function dropRate(n, hits) {
     var pct = n / hits * 100;
     return (pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)) + "%";
+}
+
+// A chance (0..1) the way the site's odds box writes it: 48% / 9.6% / 0.12% / <0.001%
+function pct(p) {
+    var v = p * 100;
+    if (v <= 0) return "0%";
+    if (v < 0.001) return "<0.001%";
+    if (v >= 99.95) return "100%";
+    var digits = v >= 10 ? 0 : v >= 1 ? 1 : Math.min(3, 1 - Math.floor(Math.log10(v)));
+    return Number(v.toFixed(digits)) + "%";
+}
+
+// The chest ledger's name for what a box gave: the rarity for an item ("legendary"),
+// otherwise the reward and its amount ("attacks:5", "ultimate")
+function outcomeKey(kind, rarity, amount) {
+    if (kind === "item") return rarity || "item";
+    return amount ? kind + ":" + amount : kind;
+}
+
+// ...and how it reads: "LEGENDARY", "+5 ATTACKS", "2 CRIT CHARGES", "ULTIMATE"
+function outcomeLabel(key) {
+    var parts = key.split(":"), kind = parts[0], n = Number(parts[1]);
+    if (kind === "attacks") return "+" + n + " ATTACK" + (n === 1 ? "" : "S");
+    if (kind === "next_crit") return n + " CRIT CHARGE" + (n === 1 ? "" : "S");
+    if (kind === "ultimate") return "ULTIMATE RECHARGE";
+    if (kind === "scroll") return "A SCROLL";
+    return kind.replace(/_/g, " ").toUpperCase();
 }
 
 // HP lost per minute over the last `mins` minutes of samples ({ t, hp }, oldest first), or
@@ -80,6 +112,14 @@ function thinPoints(points, max) {
     if (points.length <= max) return points;
     var half = Math.floor(points.length / 2);
     return points.slice(0, half).filter(function(p, i) { return i % 2 === 0; }).concat(points.slice(half));
+}
+
+// At most n points, picked evenly across the whole list (the first and last always kept)
+function shrinkPoints(points, n) {
+    if (points.length <= n) return points.slice();
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(points[Math.round(i * (points.length - 1) / (n - 1))]);
+    return out;
 }
 
 // The HP graph's columns: for `cols` columns from t0 over `span` ms, the last reading in

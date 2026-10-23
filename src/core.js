@@ -174,7 +174,7 @@ function myTotals() {
 // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
 function isOurKey(k) {
     return k.indexOf("omhp.layout.") === 0 ||
-        ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+        ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
 }
 
 // Your attacks today, from the stored SESSION (see sessionStats), or 0

@@ -28,16 +28,16 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
 
 ### Boss
-- An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes, players online (`*`) and your own damage (`+`), with a scale on the right for those two, and hovering shows the values for that moment. Phase changes are drawn on top of everything but the HP line, and FOG periods are shaded with `~`. Click an entry in the legend under it to hide or show that part (fill, heals, phases, online, your damage, fog). **[REPLAY]** plays the boss's history back from the start over 10 seconds.
+- An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes, players online (`*`) and your own damage (`+`), with a scale on the right for those two, and hovering shows the values for that moment. Phase changes are drawn on top of everything but the HP line, and FOG periods are shaded with `~`. Click an entry in the legend under it to hide or show that part (fill, heals, phases, online, your damage, fog). **[ALL] [1H] [15M]** zoom in on the recent part of a long fight, and **[REPLAY]** plays the boss's history back from the start over 10 seconds.
 - HP/min, everyone's DMG/min, HP healed and an estimated kill time from the last 5 minutes, with a range from what the last 1 and 15 minutes say, e.g. `DOWN IN ~39m (31–52m)`.
-- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed.
+- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed. **[GRAPH]** opens a boss's HP graph in a window you can move, resize, zoom and replay (kept for the last 20 bosses).
 - During the FOG event it uses the site's real data and never records the fake HP.
 
 ### Fight
 - **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**: your damage today, damage per hour (counting only the time the game was open), best hit, average hit and crit rate. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time and loot. Hover the SESSION line for the spread of your last 200 hits (smallest, median, 9 in 10, biggest).
+- **SESSION**, in its own box under FIGHT: your damage today, damage per hour (counting only the time the game was open), attacks, best and average hit, crit rate, shards earned and spent, shards per hour, and time played. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time, shards and loot. Hover AVG HIT for the spread of your last 200 hits (smallest, median, 9 in 10, biggest).
 - **FULL IN**: time until every attack slot has refilled. **IDLE** adds up how long today your attacks sat full, recharging nothing.
-- **LOOT**: what you found today, counted by rarity, with drops per 100 attacks (hover for the last 30 days). Like SESSION, it carries over when you reload and has its own **[RESET]**.
+- **LOOT**: what you found today, counted by rarity, with drops per 100 attacks (hover for the last 30 days). Like SESSION, it carries over when you reload and has its own **[RESET]**. **[CHESTS]** shows what your box openings gave, per box, next to the site's stated odds (from single opens; OPEN ALL only reports how many were opened).
 
 ### Shortcuts and filters
 - **Alt+1…9** picks a tab in the right column, **Alt+P** pins or unpins, **Alt+O** pops it out and **Alt+T** opens [TOOLKIT]. The site's own keys (attack, U, S, 1–3) are untouched.

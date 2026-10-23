@@ -41,6 +41,86 @@ function lootLog() {
         redraw();
     });
 
+    // [CHESTS]: what your box openings gave, per box, next to the site's stated odds.
+    // Counted by the leader tab from your single opens; OPEN ALL only says how many.
+    var CHESTS_KEY = "omhp.chests";
+    var chestBox = document.createElement("div");
+    chestBox.className = "omhp-chests";
+    chestBox.hidden = true;
+    panel.insertBefore(chestBox, list);
+    var chestsBtn = resetButton("what your chests gave you, against the stated odds", function() {
+        chestBox.hidden = !chestBox.hidden;
+        if (!chestBox.hidden) paintChests();
+    });
+    chestsBtn.textContent = "[CHESTS]";
+
+    document.addEventListener("omhp-unbox", function(e) {
+        if (!isLeader()) return;
+        var x;
+        try { x = JSON.parse(e.detail); } catch (err) { return; }
+        var all = loadSaved(CHESTS_KEY);
+        var id = x.box || "?";
+        var c = all[id] = all[id] || { opened: 0, bulk: 0, out: {} };
+        if (x.bulk) c.bulk += x.count || 0;
+        else {
+            c.opened++;
+            var k = outcomeKey(x.reward, x.rarity, x.amount);
+            c.out[k] = (c.out[k] || 0) + 1;
+        }
+        save(CHESTS_KEY, all);
+        if (!chestBox.hidden) paintChests();
+    });
+
+    function paintChests() {
+        var all = loadSaved(CHESTS_KEY), stated = {};
+        var bridge = document.getElementById("omhp-boss-data");
+        try { stated = JSON.parse((bridge && bridge.dataset.boxStated) || "{}"); } catch (e) { /* none */ }
+        // Boxes in the site's order, then any it doesn't list
+        var ids = Object.keys(stated).filter(function(id) { return all[id]; })
+            .concat(Object.keys(all).filter(function(id) { return !stated[id]; }));
+        chestBox.replaceChildren();
+        var head = document.createElement("div");
+        head.className = "omhp-chests-head";
+        head.textContent = ids.length ? "OBSERVED vs STATED, from your single opens" : "no chests opened yet (open one from BAG)";
+        if (ids.length) {
+            head.appendChild(resetButton("clear the chest ledger", function() {
+                save(CHESTS_KEY, {});
+                paintChests();
+            }));
+        }
+        chestBox.appendChild(head);
+        ids.forEach(function(id) {
+            var c = all[id], s = stated[id] || { name: id === "?" ? "UNKNOWN BOX" : id, odds: [] };
+            var title = document.createElement("div");
+            title.className = "omhp-chests-box";
+            title.textContent = (s.name || id).toUpperCase() + " · opened " + fmt(c.opened) +
+                (c.bulk ? " (+" + fmt(c.bulk) + " in bulk: the feed doesn't list what came out)" : "");
+            chestBox.appendChild(title);
+            // Every stated outcome, then anything seen that the odds don't list
+            var keys = s.odds.map(function(o) { return o[0]; });
+            Object.keys(c.out).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
+            keys.forEach(function(k) {
+                var odd = s.odds.filter(function(o) { return o[0] === k; })[0];
+                var n = c.out[k] || 0;
+                var rowEl = document.createElement("div");
+                rowEl.className = "omhp-chests-row";
+                var name = document.createElement("span");
+                name.className = RARITIES.indexOf(k) !== -1 ? "r-" + k : "";
+                name.textContent = outcomeLabel(k);
+                var seen = document.createElement("span");
+                seen.className = "v";
+                seen.textContent = (c.opened ? pct(n / c.opened) : "--") + " (" + fmt(n) + ")";
+                var want = document.createElement("span");
+                want.className = "dim";
+                want.textContent = odd ? "stated " + pct(odd[1]) : "not listed";
+                rowEl.appendChild(name);
+                rowEl.appendChild(seen);
+                rowEl.appendChild(want);
+                chestBox.appendChild(rowEl);
+            });
+        });
+    }
+
     // "RARE x12 1.2%": count today, and drops per 100 attacks today. The tooltip has
     // the rates over the last 30 days too.
     function paintSummary(st) {
@@ -63,6 +143,7 @@ function lootLog() {
                 summary.appendChild(r);
             }
         });
+        summary.appendChild(chestsBtn);
         if (keys.length) summary.appendChild(reset);
         summary.title = ratesTitle(st, hits);
     }
@@ -162,6 +243,7 @@ function lootLog() {
     // Another tab added something (or reset it)
     window.addEventListener("storage", function(e) {
         if (e.key === KEY) redraw();
+        if (e.key === CHESTS_KEY && !chestBox.hidden) paintChests();
     });
     // The rates move with every attack, not only with loot
     every(30000, function() { paintSummary(load()); }, { visible: true });
