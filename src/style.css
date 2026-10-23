@@ -1,0 +1,321 @@
+#app { max-width: 90%; }
+
+/* Feed, chat, messages | boss | side panels */
+@media (min-width: 1300px) {
+    #app .columns {
+        /* --omhp-l / --omhp-r are set when you drag the column gaps */
+        grid-template-columns: var(--omhp-l, minmax(0, 1fr)) minmax(0, 1.2fr) var(--omhp-r, minmax(0, 1fr));
+        position: relative;
+    }
+    #app .columns > .col-drag { display: block; }
+    #col-left { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+    #app .col-main { position: sticky; } /* top is set by pinMain() */
+
+    /* Right column: pinned, tab bar on top, the open panel scrolls under it */
+    #app .col-side {
+        position: sticky; top: 12px; max-height: calc(100vh - 24px);
+        display: flex; flex-direction: column;
+    }
+    #app .col-side > #tabs { flex: none; z-index: 5; } /* dropdowns stay above the panel */
+    #app .col-side > .panel {
+        flex: 1 1 auto; min-height: 0;
+        overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    }
+
+    /* A pinned column can't stay pinned past the bottom of its row, so the page
+       mustn't scroll further than that: no space below the columns. The footer's
+       error line floats at the bottom of the window instead. */
+    #app { padding-bottom: 12px; }
+    .foot {
+        position: fixed; left: 0; right: 0; bottom: 4px; margin: 0;
+        z-index: 40; pointer-events: none;
+    }
+    .foot > p { margin: 0; }
+}
+/* Narrower screens: the left column drops below everything else */
+@media (max-width: 1299px) {
+    #col-left { order: 99; grid-column: 1 / -1; }
+}
+
+#col-left { padding-top: 4px; scrollbar-width: thin; }
+#col-left .panel { min-height: 0; }
+#col-left #feed { max-height: none; height: calc(25vh - 60px); min-height: 100px; }
+#col-left #chat-list { height: calc(50vh - 150px); min-height: 0; }
+#col-left #panel-dms { overflow-y: auto; scrollbar-width: thin; }
+
+.left-section + .left-section { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--faint); }
+.left-toggle {
+    display: block; width: 100%; text-align: left; background: none; border: 0; padding: 2px 0 6px;
+    font: inherit; font-size: 12px; letter-spacing: .15em; color: var(--dim); cursor: pointer;
+}
+.left-toggle:hover, .left-toggle:focus-visible { color: var(--fg); outline: none; }
+.left-section.collapsed > .panel { display: none !important; }
+
+/* Drag to resize; double-click to reset */
+.left-resize { height: 8px; margin-top: 2px; cursor: ns-resize; touch-action: none; position: relative; }
+.left-resize::after {
+    content: ""; position: absolute; left: 40%; right: 40%; top: 3px;
+    border-top: 2px dotted var(--faint);
+}
+.left-resize:hover::after, .left-resize.dragging::after { border-top-color: var(--fg); }
+.left-section.collapsed > .left-resize { display: none; }
+
+/* These panels live on the left now, so hide the FEED menu on the right */
+#tabs .tab-group[data-group="feed"] { display: none !important; }
+
+/* Tidy up: the duplicate MESSAGES heading, the key hints, and the footer
+   (except the line where the site shows errors) */
+#panel-dms > .panel-h:first-child { display: none; }
+.keys { display: none; }
+
+/* FIGHT: put the "26 / 26" attack count on its own line under the pips */
+#pips > span:last-child:not(.on):not(.off):not(.dim) { display: block; }
+
+/* Column gap handles: drag to resize, double-click to reset */
+.col-drag {
+    display: none; position: absolute; top: 0; bottom: 0; width: 10px; margin-left: -5px;
+    cursor: ew-resize; touch-action: none; z-index: 6;
+}
+.col-drag::after {
+    content: ""; position: absolute; left: 4px; top: 40%; bottom: 40%;
+    border-left: 2px dotted var(--faint);
+}
+.col-drag:hover::after, .col-drag.dragging::after { border-left-color: var(--fg); }
+
+/* Flat tab bar: every unlocked tab as a button, no dropdowns (FLAT TABS feature) */
+html.omhp-flattabs #tabs .tab-cat { display: none; }
+html.omhp-flattabs #tabs .tab-group { position: static; display: contents; }
+html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] {
+    display: flex !important; position: static; transform: none; flex-direction: row; flex-wrap: wrap;
+    align-items: center; min-width: 0; padding: 0; margin: 0; background: none; border: 0; box-shadow: none;
+}
+html.omhp-flattabs #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; letter-spacing: 0; }
+/* Short labels (see shortTabs): hide the site's text, show data-short instead */
+html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
+html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
+html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]) { color: var(--amber); }
+html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
+/* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
+html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
+
+/* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
+#omhp-eta { font-size: 12px; letter-spacing: .08em; margin-top: 2px; }
+
+/* Boss area split: ASCII art left, HP graph right */
+#omhp-boss-split { display: flex; gap: 10px; align-items: center; }
+#omhp-boss-split > #boss-stage { flex: 1 1 0; min-width: 0; }
+#omhp-graph { flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; }
+#omhp-graph-head { font-size: 11px; color: var(--dim); letter-spacing: .04em; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; white-space: nowrap; }
+#omhp-graph-plot { margin: 0; font-size: 11px; line-height: 1; letter-spacing: 0; white-space: pre; color: var(--faint); }
+#omhp-graph-plot .line { color: var(--red); }
+#omhp-graph-plot .fill { color: var(--red); opacity: .35; }
+#omhp-graph-plot .heal { color: var(--mythic); }
+#omhp-graph-plot .mark { color: var(--amber); }
+#omhp-graph-plot .online { color: var(--blue); }
+#omhp-graph-plot .mine { color: var(--green); }
+#omhp-graph-plot .fog { color: var(--dim); opacity: .6; }
+#omhp-graph { position: relative; }
+#omhp-graph-plot { cursor: crosshair; }
+/* Legend entries switch their series on and off */
+#omhp-graph-plot [data-series] { cursor: pointer; }
+#omhp-graph-plot [data-series]:hover { color: var(--fg); }
+#omhp-graph-plot .omhp-legend-off { opacity: .45; text-decoration: line-through; }
+#omhp-graph-cursor {
+    position: absolute; width: 1px; background: var(--fg); opacity: .4; pointer-events: none;
+}
+#omhp-graph-tip {
+    position: absolute; z-index: 2; pointer-events: none; white-space: pre;
+    padding: 3px 6px; background: var(--bg-2); border: 1px solid var(--dim);
+    color: var(--fg); font-size: 11px; line-height: 1.35; letter-spacing: .03em;
+}
+#omhp-graph-cursor[hidden], #omhp-graph-tip[hidden] { display: none; }
+.omhp-replay { font-size: 10px; color: var(--faint); margin-left: 6px; letter-spacing: .04em; }
+.omhp-replay:hover { color: var(--fg); }
+
+/* FILTER: hidden and highlighted lines in ATTACKS and CHAT, and the boxes to set them */
+#feed li.omhp-hide, #chat-list li.omhp-hide { display: none; }
+#feed li.omhp-mark, #chat-list li.omhp-mark {
+    background: color-mix(in srgb, var(--amber) 12%, transparent); box-shadow: inset 2px 0 var(--amber);
+}
+.omhp-filter { display: grid; gap: 4px; margin: 0 0 6px; font-size: 10px; color: var(--dim); letter-spacing: .12em; }
+.omhp-filter label { display: flex; gap: 6px; align-items: center; }
+.omhp-filter-in {
+    flex: 1; min-width: 0; padding: 2px 4px; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--faint); font: inherit; font-size: 11px; letter-spacing: 0;
+}
+.omhp-filter-in:focus { border-color: var(--dim); outline: none; }
+.omhp-menu-hint { color: var(--dim); font-size: 10px; letter-spacing: .04em; }
+
+/* COMPACT: tighter lines and spacing everywhere */
+html.omhp-compact body { font-size: 13px; }
+html.omhp-compact .feed li, html.omhp-compact .chat-list li { padding: 0; gap: 6px; }
+html.omhp-compact .feed .m { line-height: 1.2; }
+html.omhp-compact .box { padding: 8px; }
+html.omhp-compact .panel-h { margin-bottom: 4px; }
+html.omhp-compact .left-section + .left-section { margin-top: 4px; padding-top: 3px; }
+html.omhp-compact .left-toggle { padding: 0 0 3px; }
+#omhp-session .val { color: var(--fg); }
+
+/* STATS THEME: Zephy's "1MHP Data Statistics" userscript (#omhp-tracker), when it's
+   installed, drawn in this page's theme and highlight colour instead of fixed amber */
+html.omhp-stats-theme #omhp-tracker {
+    background: var(--bg); color: var(--fg); border-color: var(--dim); font-family: var(--font, monospace);
+}
+html.omhp-stats-theme #omhp-tracker-head {
+    background: var(--bg-2); border-bottom-color: var(--faint); color: var(--amber); letter-spacing: .1em;
+}
+html.omhp-stats-theme #omhp-tracker-head:hover { background: var(--bg); }
+html.omhp-stats-theme #omhp-tracker .omhp-version-badge { color: var(--dim); background: var(--bg); border-color: var(--faint); }
+html.omhp-stats-theme #omhp-tracker .omhp-tab-bar,
+html.omhp-stats-theme #omhp-tracker .omhp-actions { border-color: var(--faint); }
+html.omhp-stats-theme #omhp-tracker .omhp-tab-btn { background: var(--bg-2); border-color: var(--faint); color: var(--dim); }
+html.omhp-stats-theme #omhp-tracker .omhp-tab-btn:hover { color: var(--fg); }
+html.omhp-stats-theme #omhp-tracker .omhp-tab-btn.active { background: var(--bg); border-color: var(--amber); color: var(--amber); }
+html.omhp-stats-theme #omhp-tracker .omhp-table th,
+html.omhp-stats-theme #omhp-tracker .omhp-table td { border-color: var(--faint); }
+html.omhp-stats-theme #omhp-tracker .omhp-table th { background: var(--bg-2); color: var(--fg); }
+html.omhp-stats-theme #omhp-tracker .omhp-cond-header {
+    background: var(--bg-2); border-color: var(--faint); border-left-color: var(--amber); color: var(--fg);
+}
+html.omhp-stats-theme #omhp-tracker .omhp-cond-header:hover { background: var(--bg); border-color: var(--dim); border-left-color: var(--amber); }
+html.omhp-stats-theme #omhp-tracker .omhp-cond-agg { color: var(--dim); }
+html.omhp-stats-theme #omhp-tracker .omhp-cond-agg b,
+html.omhp-stats-theme #omhp-tracker .omhp-live-val { color: var(--fg); }
+html.omhp-stats-theme #omhp-tracker .omhp-toggle-sym { color: var(--amber); }
+html.omhp-stats-theme #omhp-tracker .omhp-act-btn { background: var(--bg-2); border-color: var(--amber); color: var(--amber); }
+html.omhp-stats-theme #omhp-tracker .omhp-act-btn:hover { background: var(--amber); color: var(--bg); }
+html.omhp-stats-theme #omhp-tracker .omhp-live-card { background: var(--bg-2); border-color: var(--faint); }
+html.omhp-stats-theme #omhp-tracker .omhp-live-card-title { color: var(--dim); border-bottom-color: var(--faint); }
+html.omhp-stats-theme #omhp-tracker .omhp-live-label { color: var(--dim); }
+/* Its colours written straight onto elements: values, and the faint "nothing yet" text */
+html.omhp-stats-theme #omhp-tracker [style*="#ffd45c"] { color: var(--fg) !important; }
+html.omhp-stats-theme #omhp-tracker [style*="#6d5b38"],
+html.omhp-stats-theme #omhp-tracker [style*="#665"] { color: var(--dim) !important; }
+/* Its rarity colours, as the site draws them (without the animations) */
+html.omhp-stats-theme #omhp-tracker .rar-common { color: #b9b2a0; }
+html.omhp-stats-theme #omhp-tracker .rar-uncommon { color: var(--green); }
+html.omhp-stats-theme #omhp-tracker .rar-rare { color: var(--blue); }
+html.omhp-stats-theme #omhp-tracker .rar-epic { color: #9a7bff; }
+html.omhp-stats-theme #omhp-tracker .rar-legendary { color: #ff9a1f; }
+html.omhp-stats-theme #omhp-tracker .rar-mythic { color: #ff3b5c; }
+html.omhp-stats-theme #omhp-tracker .rar-godly { color: #fff; text-shadow: 0 0 6px #ffd84d; }
+html.omhp-stats-theme #omhp-tracker .rar-ascended { color: #ff8fd8; text-shadow: none; }
+html.omhp-stats-theme #omhp-tracker .rar-boss-unique,
+html.omhp-stats-theme #omhp-tracker .rar-boss_unique,
+html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0 0 6px #76f5ff; }
+
+/* Left column headers: collapse toggle + reorder arrows */
+.left-head { display: flex; align-items: center; gap: 2px; }
+.left-head .left-toggle { flex: 1; }
+.left-move {
+    background: none; border: 0; padding: 0 3px 4px; font: inherit; font-size: 10px;
+    color: var(--faint); cursor: pointer;
+}
+.left-move:hover, .left-move:focus-visible { color: var(--fg); outline: none; }
+
+/* LOOT section */
+.omhp-loot-sum { margin: 0 0 4px; }
+.omhp-rate { color: var(--faint); font-size: 10px; }
+#omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
+
+/* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */
+#omhp-pinned {
+    flex: 0 1 auto; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
+}
+#omhp-pinned > .panel { min-height: 0; }
+/* Drag the line under the pinned panel to share the column's height; it has a set
+   height once dragged */
+#omhp-pinned.sized { flex: none; max-height: none; }
+#omhp-pin-resize { flex: none; margin: -4px 0 4px; }
+#omhp-pin-resize[hidden] { display: none; }
+
+/* BAG: smaller loot-box cards so more fit across the right column */
+.col-side .box-row, .omhp-float .box-row { gap: 6px; }
+.col-side .box-card, .omhp-float .box-card { padding: 3px 5px; min-width: 0; }
+.col-side .box-card pre, .omhp-float .box-card pre { font-size: 10px; line-height: 1.05; margin: 0; }
+.col-side .box-card-actions, .omhp-float .box-card-actions { gap: 0; margin-top: 2px; }
+.col-side .box-card-actions .inline-btn, .omhp-float .box-card-actions .inline-btn {
+    font-size: 11px; padding: 1px 2px; letter-spacing: 0;
+}
+#tabs .omhp-pin { font-size: 11px; padding: 2px 4px; margin-left: 6px; color: var(--dim); }
+#tabs .omhp-pin:hover { color: var(--fg); }
+
+/* Pop-out windows: [POP OUT] for the open right-hand panel, ⧉ on left sections */
+#tabs .omhp-popout { font-size: 11px; padding: 2px 4px; margin-left: 6px; color: var(--dim); }
+#tabs .omhp-popout:hover:not(:disabled) { color: var(--fg); }
+#tabs .omhp-popout:disabled { color: var(--faint); cursor: default; }
+.omhp-float {
+    position: fixed; z-index: 60; display: flex; flex-direction: column;
+    min-width: 300px; min-height: 200px; resize: both; overflow: hidden;
+    background: var(--bg); border: 1px solid var(--dim); box-shadow: 0 10px 40px rgba(0,0,0,.7);
+}
+.omhp-float-bar {
+    flex: none; display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 8px; background: var(--bg-2); border-bottom: 1px solid var(--faint);
+    color: var(--amber); font-size: 12px; letter-spacing: .15em; cursor: move; user-select: none;
+}
+.omhp-float-body {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    overflow: auto; padding: 8px 12px 16px; scrollbar-width: thin;
+}
+.omhp-float-body > .panel { flex: 1 0 auto; min-height: 0; }
+.omhp-float-tools { display: flex; align-items: center; gap: 8px; }
+.omhp-float-op { width: 70px; height: 12px; accent-color: var(--amber); cursor: pointer; }
+.omhp-float.minimised { resize: none; min-height: 0; }
+.omhp-float.minimised > .omhp-float-body { display: none; }
+/* Lists that scroll on their own fill the window instead of keeping their column height */
+.omhp-float-body > #panel-feed, .omhp-float-body > #panel-chat, .omhp-float-body > #omhp-loot {
+    flex: 1 1 0; display: flex; flex-direction: column; overflow: hidden;
+}
+.omhp-float-body #panel-chat > .chat, .omhp-float-body #panel-feed > .feed-wrap {
+    flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
+}
+.omhp-float-body #chat-list, .omhp-float-body #feed, .omhp-float-body #omhp-loot-list {
+    flex: 1 1 0; height: auto !important; max-height: none !important; min-height: 0;
+}
+/* DESIGN: the grid fills the window's width (the site's own sizing stops at 16px) */
+.omhp-float .design-canvas { font-size: var(--omhp-design-font, 13px) !important; }
+/* A left section whose panel is out in a window */
+.left-section.floated .left-toggle::after { content: " (popped out)"; color: var(--faint); }
+.left-section.floated > .left-resize { display: none; }
+
+/* [TOOLKIT] menu: a header, then one labelled row per setting */
+.omhp-accent-wrap { position: relative; display: inline-block; }
+.omhp-accent-pop {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
+    width: 340px; max-width: calc(100vw - 24px); padding: 0 0 8px;
+    background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+    text-align: left; white-space: normal; font-size: 11px; letter-spacing: .04em;
+}
+.omhp-accent-pop[hidden] { display: none; }
+.omhp-menu-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 10px; margin-bottom: 2px; border-bottom: 1px solid var(--faint);
+    color: var(--amber); font-size: 12px; letter-spacing: .15em;
+}
+.omhp-menu-row { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 8px; padding: 7px 10px 0; }
+.omhp-menu-label { color: var(--faint); font-size: 10px; letter-spacing: .12em; padding-top: 2px; }
+.omhp-menu-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.omhp-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+.omhp-choice { font-size: 11px; color: var(--dim); padding: 1px 0; letter-spacing: .04em; text-align: left; }
+.omhp-choice:hover, .omhp-choice:focus-visible { color: var(--fg); }
+.omhp-choice.on { color: var(--fg); }
+.omhp-choice.on:not(.omhp-check) { text-decoration: underline; text-underline-offset: 3px; }
+.omhp-check::before { content: "[ ] "; color: var(--faint); white-space: pre; }
+.omhp-check.on::before { content: "[x] "; color: var(--amber); }
+.omhp-menu-note { padding: 4px 10px 0 96px; color: var(--amber); font-size: 10px; letter-spacing: .08em; }
+.omhp-menu-note[hidden] { display: none; }
+.omhp-del { color: var(--faint); margin-left: -7px; }
+.omhp-del:hover { color: var(--red); }
+.omhp-swatch {
+    width: 16px; height: 16px; padding: 0; border: 1px solid var(--faint); cursor: pointer;
+}
+.omhp-swatch.on { outline: 2px solid var(--fg); outline-offset: 1px; }
+.omhp-reset { font-size: 10px; color: var(--faint); margin-left: 6px; }
+.omhp-reset:hover { color: var(--fg); }
+.omhp-health { color: var(--red); cursor: help; }
+#omhp-days { white-space: pre; font-size: 11px; line-height: 1.35; color: var(--dim); overflow-x: auto; margin-top: 4px; }
+#omhp-days[hidden] { display: none; }
+.foot { margin-top: 8px; }
+.foot > p:not(#err) { display: none; }

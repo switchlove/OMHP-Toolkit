@@ -17,4 +17,13 @@ export default [
             "no-unused-vars": ["warn", { caughtErrors: "none" }],
         },
     },
+    {
+        // The build script and the tests run in Node
+        files: ["build.js", "test/**/*.js"],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: "commonjs",
+            globals: globals.node,
+        },
+    },
 ];

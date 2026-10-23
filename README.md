@@ -68,12 +68,28 @@ Your layout, sizes, order, colours, feature choices, HP history, session and loo
 
 This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are the ones the site makes itself when you open RANKS or HISTORY, repeated while those panels are on screen. Everything it keeps stays in your browser.
 
+## Development
+
+The userscript is built from the files in `src/`; don't edit `omhp-toolkit.user.js` by hand.
+
+- `src/header.js` holds the userscript header (including `@version`) and the feature notes. `src/style.css` is the stylesheet. Everything else is one part each: `core.js` and `lib.js` (shared helpers), then a file per feature (`graph.js`, `session.js`, `loot.js`, `menu.js`, ...).
+- `build.js` joins them, in the order listed at its top, into one function so they share a scope, and writes `omhp-toolkit.user.js`. That file stays committed, because installs and updates point at it.
+- `src/lib.js` has the helpers that don't touch the page (formatting, the tab title, SESSION's counting, the ETA, the graph's columns). `test/lib.test.js` tests them.
+
+```sh
+npm install      # once: the lint tools
+npm run build    # write omhp-toolkit.user.js from src/
+npm test         # the tests
+npm run lint     # eslint on the built script, the build script and the tests
+npm run check    # is the built script up to date, and does it parse?
+```
+
 ## Releasing
 
-1. Raise `@version` in `omhp-toolkit.user.js`. Tampermonkey only updates installs when this number goes up, and CI fails any change to the script that doesn't raise it.
-2. Update the README (and the feature notes at the top of the script) for anything new.
-3. Run `npm install` once, then `npm run lint` to catch mistakes such as undefined variables before pushing.
-4. Commit and push to `main`. CI checks the script's syntax and lint, and the release workflow creates a `vX.Y` GitHub release with the script attached. No manual tagging is needed.
+1. Raise `@version` in `src/header.js`, then `npm run build`. Tampermonkey only updates installs when this number goes up, and CI fails any change to the script that doesn't raise it.
+2. Update the README (and the feature notes in `src/header.js`) for anything new.
+3. Run `npm test` and `npm run lint`.
+4. Commit and push to `main`. CI checks that the built script matches `src/`, its syntax, the tests and lint, and the release workflow creates a `vX.Y` GitHub release with the script attached. No manual tagging is needed.
 
 ## License
 

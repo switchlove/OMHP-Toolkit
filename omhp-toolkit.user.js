@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.25
+// @version      0.26
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -122,6 +122,122 @@
     var DAYS_KEY = "omhp.days";
     var PRESETS_KEY = "omhp.presets";
 
+    // Pure helpers: they don't touch the page or storage, so test/lib.test.js runs them in Node.
+
+    // 1234567 -> "1.2M", 243000 -> "243K"
+    function short(n) {
+        if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M";
+        if (n >= 1e3) return Math.round(n / 1e3) + "K";
+        return String(n);
+    }
+
+    function fmt(n) {
+        return Math.round(n).toLocaleString("en-US");
+    }
+
+    // 42 -> "42m", 187 -> "3h 07m"
+    function dur(mins) {
+        mins = Math.round(mins);
+        if (mins < 60) return mins + "m";
+        return Math.floor(mins / 60) + "h " + String(mins % 60).padStart(2, "0") + "m";
+    }
+
+    // Local date as "YYYY-MM-DD" (now, or the date given), for things that start over each day
+    function today(d) {
+        d = d || new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    // The tab title with our part ("[72% ~39m]", "[FOG]", or "" for none) after the site's
+    // attack count: "(3/5) ONE MILLION HP" -> "(3/5) [72% ~39m] ONE MILLION HP". A title a
+    // world event is flashing ("(!) ...") is left as it is.
+    var TITLE_PART = /\[(?:FOG|\d[\d.]*%[^\]]*)\] ?/;
+
+    function titleWith(title, part) {
+        if (/^\(!\)/.test(title)) return title;
+        var plain = title.replace(TITLE_PART, "");
+        if (!part) return plain;
+        var m = plain.match(/^\(\d+\/\d+\)/);
+        return m ? m[0] + " " + part + plain.slice(m[0].length) : part + " " + plain;
+    }
+
+    // SESSION's numbers: lifetime totals now (t) minus the first reading today (s.base), plus
+    // what was counted from the screen without the site's data (s.extra)
+    function sessionCounts(s, t) {
+        var b = s.base;
+        var d = t && b ? { dmg: t.dmg - b.dmg, hits: t.hits - b.hits, crits: (t.crits || 0) - (b.crits || 0) }
+            : { dmg: 0, hits: 0, crits: 0 };
+        return { dmg: d.dmg + s.extra.dmg, hits: d.hits + s.extra.hits, crits: d.crits + s.extra.crits };
+    }
+
+    // Drops per 100 attacks: 3 in 250 -> "1.2%"
+    function dropRate(n, hits) {
+        var pct = n / hits * 100;
+        return (pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)) + "%";
+    }
+
+    // HP lost per minute over the last `mins` minutes of samples ({ t, hp }, oldest first), or
+    // over all of them if they cover less; null when they cover under half a minute
+    function rateOver(samples, now, mins) {
+        if (!samples.length) return null;
+        var from = samples[0];
+        for (var i = samples.length - 1; i >= 0; i--) {
+            if (now - samples[i].t > mins * 60000) break;
+            from = samples[i];
+        }
+        var m = (now - from.t) / 60000;
+        var hp = samples[samples.length - 1].hp;
+        return m >= 0.5 ? { perMin: (from.hp - hp) / m, first: from, minutes: m } : null;
+    }
+
+    // Minutes left at each window's rate, for the windows where the boss is going down
+    function etaMinutes(samples, now, windows) {
+        var hp = samples.length ? samples[samples.length - 1].hp : 0;
+        return windows.map(function(w) { return rateOver(samples, now, w); })
+            .filter(function(r) { return r && r.perMin > 0; })
+            .map(function(r) { return hp / r.perMin; });
+    }
+
+    // Long fights: past `max` points, keep every second point of the older half (the start
+    // and the recent part stay)
+    function thinPoints(points, max) {
+        if (points.length <= max) return points;
+        var half = Math.floor(points.length / 2);
+        return points.slice(0, half).filter(function(p, i) { return i % 2 === 0; }).concat(points.slice(half));
+    }
+
+    // The HP graph's columns: for `cols` columns from t0 over `span` ms, the last reading in
+    // each (gaps carry the previous one forward). points are [time, hp, phase, online, your
+    // lifetime damage]; fog is [[start, end], ...]. Nothing after `cutoff` (the replay).
+    // mine is your damage within each column; fogCols says which columns FOG covered.
+    function bucketColumns(points, fog, t0, span, cols, cutoff) {
+        var vals = [], phases = [], online = [], mine = [], fogCols = [];
+        var j = 0, last = null, lastPhase = null, lastOnline = null, lastMine = null, prevMine = null;
+        for (var c = 0; c < cols; c++) {
+            var start = t0 + span * c / cols, end = t0 + span * (c + 1) / cols;
+            fogCols.push(start <= cutoff && fog.some(function(f) { return f[0] <= end && f[1] >= start; }));
+            if (start > cutoff) {
+                vals.push(null);
+                phases.push(null);
+                online.push(null);
+                mine.push(null);
+                continue;
+            }
+            while (j < points.length && points[j][0] <= end) {
+                last = points[j][1];
+                if (points[j][2]) lastPhase = points[j][2];
+                if (points[j][3] != null) lastOnline = points[j][3];
+                if (points[j][4] != null) lastMine = points[j][4];
+                j++;
+            }
+            vals.push(last);
+            phases.push(lastPhase);
+            online.push(lastOnline);
+            mine.push(lastMine !== null && prevMine !== null && lastMine >= prevMine ? lastMine - prevMine : null);
+            prevMine = lastMine;
+        }
+        return { vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols };
+    }
     var css = `
         #app { max-width: 90%; }
 
@@ -574,33 +690,9 @@
         return !!(bar && bar.classList.contains("fogged"));
     }
 
-    // 1234567 -> "1.2M", 243000 -> "243K"
-    function short(n) {
-        if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M";
-        if (n >= 1e3) return Math.round(n / 1e3) + "K";
-        return String(n);
-    }
-
     function numberIn(el) {
         var m = el && (el.textContent || "").replace(/,/g, "").match(/\d+/);
         return m ? Number(m[0]) : null;
-    }
-
-    function fmt(n) {
-        return Math.round(n).toLocaleString("en-US");
-    }
-
-    // 42 -> "42m", 187 -> "3h 07m"
-    function dur(mins) {
-        mins = Math.round(mins);
-        if (mins < 60) return mins + "m";
-        return Math.floor(mins / 60) + "h " + String(mins % 60).padStart(2, "0") + "m";
-    }
-
-    // Local date as "YYYY-MM-DD", for things that start over each day
-    function today() {
-        var d = new Date();
-        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
     }
 
     // Append " :: el" to the top bar, with the spacing the site uses around its separators
@@ -672,13 +764,23 @@
     var TAB_ID = Math.random().toString(36).slice(2);
     var LEADER_KEY = "omhp.leader";
 
-    function isLeader() {
+    var amLeader = false;
+
+    // Every 5s: take the lock if it's free (or its tab stopped renewing it), renew it if it's
+    // ours. Last write wins, so if two tabs claim at once, the next round settles it.
+    function claimLeader() {
         var l = loadJSON(LEADER_KEY, null);
-        if (l && l.id !== TAB_ID && Date.now() - l.t < 15000) return false;
-        save(LEADER_KEY, { id: TAB_ID, t: Date.now() });
-        return true;
+        amLeader = !(l && l.id !== TAB_ID && Date.now() - l.t < 15000);
+        if (amLeader) save(LEADER_KEY, { id: TAB_ID, t: Date.now() });
     }
-    every(5000, isLeader);
+
+    // Whether this tab records (cheap: the 5s round above does the storage work)
+    function isLeader() {
+        return amLeader;
+    }
+
+    claimLeader();
+    every(5000, claimLeader);
     window.addEventListener("pagehide", function() {
         var l = loadJSON(LEADER_KEY, null);
         if (l && l.id === TAB_ID) {
@@ -1163,17 +1265,7 @@
             samples.push({ t: now, hp: hp, dmg: typeof b.dmg === "number" ? b.dmg : null });
             while (samples.length && now - samples[0].t > RATE_MS) samples.shift();
 
-            // HP lost per minute over the last `mins` minutes (or as long as we've watched)
-            function rateOver(mins) {
-                var from = samples[0];
-                for (var i = samples.length - 1; i >= 0; i--) {
-                    if (now - samples[i].t > mins * 60000) break;
-                    from = samples[i];
-                }
-                var m = (now - from.t) / 60000;
-                return m >= 0.5 ? { perMin: (from.hp - hp) / m, first: from, minutes: m } : null;
-            }
-            var main = rateOver(5);
+            var main = rateOver(samples, now, 5); // see lib.js
             if (!main) {
                 line.textContent = "MEASURING…";
                 return;
@@ -1193,8 +1285,7 @@
             }
             etaShort = "~" + dur(hp / perMin);
             // The spread of the other windows' estimates, when it says something
-            var etas = WINDOWS.map(rateOver).filter(function(r) { return r && r.perMin > 0; })
-                .map(function(r) { return hp / r.perMin; });
+            var etas = etaMinutes(samples, now, WINDOWS);
             var lo = Math.min.apply(null, etas), hi = Math.max.apply(null, etas);
             var range = etas.length > 1 && hi - lo >= 2 ? " (" + dur(lo).replace(/m$/, "") + "–" + dur(hi) + ")" : "";
             line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort + range;
@@ -1383,10 +1474,7 @@
             var me = myTotals();
             points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
             // Long fights: thin out the older half instead of dropping the start
-            if (points.length > MAX_POINTS) {
-                var half = Math.floor(points.length / 2);
-                points = points.slice(0, half).filter(function(p, i) { return i % 2 === 0; }).concat(points.slice(half));
-            }
+            points = thinPoints(points, MAX_POINTS);
             // Keep recording in a background tab, but only draw what can be seen
             if (!document.hidden) draw();
         }
@@ -1435,40 +1523,12 @@
             var span = Math.max(1, t1 - t0);
             // During [REPLAY], nothing after the moment it has reached
             var cutoff = replayAt === null ? Infinity : replayAt;
-            // Last reading in each column; gaps carry the previous value forward
-            var vals = [], phases = [], online = [], mine = [];
-            var j = 0, last = null, lastPhase = null, lastOnline = null, lastMine = null, prevMine = null;
-            for (var c = 0; c < cols; c++) {
-                if (t0 + span * c / cols > cutoff) {
-                    vals.push(null);
-                    phases.push(null);
-                    online.push(null);
-                    mine.push(null);
-                    continue;
-                }
-                var end = t0 + span * (c + 1) / cols;
-                while (j < points.length && points[j][0] <= end) {
-                    last = points[j][1];
-                    if (points[j][2]) lastPhase = points[j][2];
-                    if (points[j][3] != null) lastOnline = points[j][3];
-                    if (points[j][4] != null) lastMine = points[j][4];
-                    j++;
-                }
-                vals.push(last);
-                phases.push(lastPhase);
-                online.push(lastOnline);
-                // Your damage within this column (your lifetime total's rise across it)
-                mine.push(lastMine !== null && prevMine !== null && lastMine >= prevMine ? lastMine - prevMine : null);
-                prevMine = lastMine;
-            }
+            // Last reading in each column, your damage within it, and FOG (see lib.js)
+            var colsData = bucketColumns(points, fog, t0, span, cols, cutoff);
+            var vals = colsData.vals, phases = colsData.phases, online = colsData.online, mine = colsData.mine;
+            var fogCols = colsData.fogCols;
             var maxMine = Math.max.apply(null, mine.filter(function(n) { return n; }).concat([0]));
             var maxOnline = Math.max.apply(null, online.filter(function(n) { return n !== null; }).concat([0]));
-            // Columns that overlap a FOG span
-            var fogCols = [];
-            for (var fc = 0; fc < cols; fc++) {
-                var cs = t0 + span * fc / cols, ce = t0 + span * (fc + 1) / cols;
-                fogCols.push(cs <= cutoff && fog.some(function(f) { return f[0] <= ce && f[1] >= cs; }));
-            }
             // Whether there's anything to switch, before switching it off
             var hasOnline = maxOnline > 0, hasMine = maxMine > 0, hasFog = fogCols.indexOf(true) !== -1;
             if (!show.online) maxOnline = 0;
@@ -1711,13 +1771,6 @@
             return { v: 2, day: today(), base: null, last: null, extra: { dmg: 0, hits: 0, crits: 0 }, best: 0, activeMs: 0, seen: 0, sizes: [] };
         }
 
-        function counts(s, t) {
-            var b = s.base;
-            var d = t && b ? { dmg: t.dmg - b.dmg, hits: t.hits - b.hits, crits: (t.crits || 0) - (b.crits || 0) }
-                : { dmg: 0, hits: 0, crits: 0 };
-            return { dmg: d.dmg + s.extra.dmg, hits: d.hits + s.extra.hits, crits: d.crits + s.extra.crits };
-        }
-
         // The stored session; a new day starts it over and files the old one under DAYS
         function load() {
             var s = loadSaved(KEY);
@@ -1728,7 +1781,7 @@
             }
             if (s.v !== 2) s = fresh();
             if (s.day !== today()) {
-                var c = counts(s, s.last);
+                var c = sessionCounts(s, s.last);
                 if (c.dmg) archiveDay(s.day, "session", { dmg: c.dmg, hits: c.hits, crits: c.crits, best: s.best, activeMs: s.activeMs });
                 s = fresh();
                 save(KEY, s);
@@ -1737,10 +1790,12 @@
         }
 
         // Read, change and save, so tabs open side by side don't overwrite each other
+        // (Only saved when something changed, which also spares the other tabs a repaint.)
         function update(change) {
             var s = load();
+            var before = JSON.stringify(s);
             change(s);
-            save(KEY, s);
+            if (JSON.stringify(s) !== before) save(KEY, s);
             paint();
         }
 
@@ -1780,7 +1835,7 @@
 
         function paint() {
             var s = load();
-            var c = counts(s, myTotals() || s.last);
+            var c = sessionCounts(s, myTotals() || s.last);
             var parts = ["SESSION ", val(fmt(c.dmg) + " DMG")];
             var hours = s.activeMs / 3600000;
             if (hours >= 1 / 60) parts.push(" · ", val(fmt(c.dmg / hours) + "/HR"));
@@ -2154,23 +2209,36 @@
         }
 
         // How long your attacks sat full today (recharging nothing). With several tabs
-        // open, only the leader counts it.
+        // open, only the leader counts it. Kept in memory and saved every 30s (and when the
+        // page closes); the other tabs follow through the storage event.
         var IDLE_KEY = "omhp.idle";
+        var idleSt = loadSaved(IDLE_KEY), idleDirty = false;
         var lastTick = Date.now();
         function idle(full) {
-            var st = loadSaved(IDLE_KEY);
-            if (st.day !== today()) {
-                if (st.day && st.ms >= 60000) archiveDay(st.day, "idle", { ms: st.ms });
-                st = { day: today(), ms: 0 };
+            if (idleSt.day !== today()) {
+                if (idleSt.day && idleSt.ms >= 60000) archiveDay(idleSt.day, "idle", { ms: idleSt.ms });
+                idleSt = { day: today(), ms: 0 };
+                idleDirty = true;
             }
             var now = Date.now();
             if (full && isLeader()) {
-                st.ms += Math.min(90000, now - lastTick); // not across sleep
-                save(IDLE_KEY, st);
+                idleSt.ms += Math.min(90000, now - lastTick); // not across sleep
+                idleDirty = true;
             }
             lastTick = now;
-            return st.ms >= 60000 ? " · IDLE " + dur(st.ms / 60000) + " TODAY" : "";
+            return idleSt.ms >= 60000 ? " · IDLE " + dur(idleSt.ms / 60000) + " TODAY" : "";
         }
+
+        function saveIdle() {
+            if (!idleDirty) return;
+            idleDirty = false;
+            save(IDLE_KEY, idleSt);
+        }
+        every(30000, saveIdle);
+        window.addEventListener("pagehide", saveIdle);
+        window.addEventListener("storage", function(e) {
+            if (e.key === IDLE_KEY && !isLeader()) idleSt = loadSaved(IDLE_KEY);
+        });
 
         function tick() {
             var key = (pips.dataset.key || "").split("/"); // "left/per", set by the site
@@ -2259,18 +2327,12 @@
                 if (hits > 0) {
                     var r = document.createElement("span");
                     r.className = "omhp-rate";
-                    r.textContent = " " + rate(st.counts[k][0], hits);
+                    r.textContent = " " + dropRate(st.counts[k][0], hits);
                     summary.appendChild(r);
                 }
             });
             if (keys.length) summary.appendChild(reset);
             summary.title = ratesTitle(st, hits);
-        }
-
-        // Drops per 100 attacks: 3 in 250 -> "1.2%"
-        function rate(n, hits) {
-            var pct = n / hits * 100;
-            return (pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)) + "%";
         }
 
         function ratesTitle(st, hits) {
@@ -2286,10 +2348,10 @@
             });
             var lines = ["drops per 100 attacks"];
             if (hits) lines.push("today (" + fmt(hits) + " attacks): " + Object.keys(st.counts).map(function(k) {
-                return st.counts[k][1] + " " + rate(st.counts[k][0], hits);
+                return st.counts[k][1] + " " + dropRate(st.counts[k][0], hits);
             }).join(", "));
             if (allHits > hits) lines.push("last 30 days (" + fmt(allHits) + " attacks): " + Object.keys(all).map(function(k) {
-                return all[k][1] + " " + rate(all[k][0], allHits);
+                return all[k][1] + " " + dropRate(all[k][0], allHits);
             }).join(", "));
             return lines.length > 1 ? lines.join("\n") : "";
         }
@@ -2902,21 +2964,15 @@
     // The browser tab's title: the site leads it with your attacks, "(3/5) ONE MILLION HP";
     // this adds the boss's HP and kill estimate after that, "(3/5) [72% ~39m] ONE MILLION HP".
     function tabTitle() {
-        var OURS = /\[(?:FOG|\d[\d.]*%[^\]]*)\] ?/;
-
         function paint() {
-            var t = document.title;
-            if (/^\(!\)/.test(t)) return; // a world event is flashing the title: leave it
-            var plain = t.replace(OURS, "");
             var part = "";
             if (fogged()) part = "[FOG]";
             else {
                 var b = trueBoss();
                 if (b && b.max && b.alive !== false) part = "[" + (b.hp / b.max * 100).toFixed(0) + "%" + (etaShort ? " " + etaShort : "") + "]";
             }
-            var m = plain.match(/^\(\d+\/\d+\)/);
-            var next = !part ? plain : m ? m[0] + " " + part + plain.slice(m[0].length) : part + " " + plain;
-            if (next !== t) document.title = next;
+            var next = titleWith(document.title, part); // see lib.js
+            if (next !== document.title) document.title = next;
         }
 
         var titleEl = document.querySelector("title");

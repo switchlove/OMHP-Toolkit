@@ -4,7 +4,10 @@
   "description": "Dev tooling only; the userscript itself has no dependencies.",
   "license": "MIT",
   "scripts": {
-    "lint": "eslint --max-warnings 0 omhp-toolkit.user.js"
+    "build": "node build.js",
+    "check": "node build.js --check && node --check omhp-toolkit.user.js",
+    "test": "node --test",
+    "lint": "eslint --max-warnings 0 omhp-toolkit.user.js build.js test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
