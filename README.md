@@ -60,7 +60,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
   - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
   - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, **TILE** arranges the open pop-out windows, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
   - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
-- **⚠ N OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which.
+- A warning such as **⚠ 2 OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which parts.
 - Local time and how long the page has been open.
 - The account button shows your badges and name.
 
