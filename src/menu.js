@@ -66,17 +66,90 @@ function toolkitMenu() {
     });
     row("COLOUR", swatches);
 
-    var themeBtns = THEMES.map(function(t) {
-        var b = choice(t.name, t.name === currentTheme, null, function() {
-            currentTheme = t.name;
-            var stored = t.vars ? t.name : null; // the default is stored as "no override"
-            applyTheme(stored);
-            save(THEME_KEY, stored);
-            themeBtns.forEach(function(x) { x.classList.toggle("on", x === b); });
+    // The themes, then CUSTOM: your own colours, edited below and shareable as a code
+    var themeBtns = THEMES.map(function(t) { return t.name; }).concat(["CUSTOM"]).map(function(name) {
+        var b = choice(name, name === currentTheme, name === "CUSTOM" ? "your own colours" : null, function() {
+            pickTheme(name);
         });
         return b;
     });
     row("THEME", themeBtns);
+
+    function pickTheme(name) {
+        currentTheme = name;
+        var t = THEMES.filter(function(x) { return x.name === name; })[0];
+        var stored = name === "CUSTOM" || (t && t.vars) ? name : null; // the default is stored as "no override"
+        if (name === "CUSTOM" && !Object.keys(loadSaved(CUSTOM_THEME_KEY)).length) save(CUSTOM_THEME_KEY, shownColours());
+        applyTheme(stored);
+        save(THEME_KEY, stored);
+        themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === name); });
+        paintCustom();
+    }
+
+    // The colours on screen now, as #rrggbb (where to start a CUSTOM theme from)
+    function shownColours() {
+        var cs = getComputedStyle(document.documentElement), out = {};
+        THEME_VARS.forEach(function(v) {
+            var c = cs.getPropertyValue("--" + v).trim().toLowerCase();
+            out[v] = /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
+        });
+        return out;
+    }
+
+    // CUSTOM: a colour picker for each of the theme's colours (changes show at once),
+    // SHARE to copy its code, USE CODE to apply someone else's
+    var customBody = row("CUSTOM", []);
+    var customRow = customBody.parentElement;
+    var pickers = THEME_VARS.map(function(v) {
+        var label = el("label", "omhp-custom-pick");
+        var input = el("input");
+        input.type = "color";
+        input.title = "the theme's " + v + " colour";
+        input.addEventListener("input", function() {
+            var vars = loadSaved(CUSTOM_THEME_KEY);
+            vars[v] = input.value;
+            save(CUSTOM_THEME_KEY, vars);
+            applyTheme("CUSTOM");
+        });
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(v.toUpperCase()));
+        customBody.appendChild(label);
+        return input;
+    });
+    var shareNote = el("span", "omhp-menu-hint");
+    customBody.appendChild(choice("SHARE", false, "copy this theme (and your highlight colour) as a code", function() {
+        var code = themeCode(loadSaved(CUSTOM_THEME_KEY), loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex);
+        var shown = function() { prompt("Your theme code:", code); };
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(code).then(function() { shareNote.textContent = "copied"; }, shown);
+        } else shown();
+    }));
+    customBody.appendChild(choice("USE CODE", false, "apply a theme code someone shared", function() {
+        var got = parseThemeCode(prompt("Paste a theme code (OMHP1-...):") || "");
+        if (!got) {
+            shareNote.textContent = "that isn't a theme code";
+            return;
+        }
+        save(CUSTOM_THEME_KEY, got.vars);
+        var accent = got.accent === ACCENTS[0].hex ? null : got.accent;
+        applyAccent(accent);
+        save(ACCENT_KEY, accent);
+        current = got.accent;
+        swatches.forEach(function(x) { x.classList.toggle("on", x.title === (ACCENTS.filter(function(a) { return a.hex === got.accent; })[0] || {}).name); });
+        shareNote.textContent = "applied";
+        pickTheme("CUSTOM");
+    }));
+    customBody.appendChild(shareNote);
+
+    function paintCustom() {
+        customRow.hidden = currentTheme !== "CUSTOM";
+        var vars = loadSaved(CUSTOM_THEME_KEY);
+        pickers.forEach(function(input, i) {
+            var c = vars[THEME_VARS[i]];
+            if (c && input.value !== c) input.value = c;
+        });
+    }
+    paintCustom();
 
     // Features on/off: takes effect on the next reload
     var note = el("div", "omhp-menu-note", "reload the page to apply");
@@ -159,6 +232,9 @@ function toolkitMenu() {
             del.classList.add("omhp-del");
             layoutBody.appendChild(del);
         });
+        layoutBody.appendChild(choice("TILE", false, "arrange the open pop-out windows in a grid (drag a window with Shift held to stop it snapping)", function() {
+            if (tileWindows) tileWindows();
+        }));
         layoutBody.appendChild(choice("+ SAVE", false, "save the current layout under a name", function() {
             var name = (prompt("Name this layout:") || "").trim().toUpperCase().slice(0, 20);
             if (!name || BUILT_IN[name]) return;

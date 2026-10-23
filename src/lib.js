@@ -122,6 +122,61 @@ function shrinkPoints(points, n) {
     return out;
 }
 
+// A theme as a short code to share: "OMHP1-", then the theme's colours (bg, bg-2, fg, dim,
+// faint) and the highlight colour, as six hex colours without the "#"
+var THEME_VARS = ["bg", "bg-2", "fg", "dim", "faint"];
+
+function themeCode(vars, accent) {
+    return "OMHP1-" + THEME_VARS.map(function(v) { return vars[v] || "#000000"; }).concat([accent || "#ffb000"])
+        .map(function(hex) { return hex.replace("#", "").toLowerCase(); }).join("-");
+}
+
+// ...and back: { vars, accent }, or null if it isn't a theme code
+function parseThemeCode(code) {
+    var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6})$/i);
+    if (!m) return null;
+    var hex = m[1].toLowerCase().split("-").map(function(h) { return "#" + h; });
+    var vars = {};
+    THEME_VARS.forEach(function(v, i) { vars[v] = hex[i]; });
+    return { vars: vars, accent: hex[5] };
+}
+
+// Snap a w x h box dragged to (x, y) to the edges of the view (vw x vh) and of other
+// boxes ([{ x, y, w, h }]) when it comes within `dist` px: flush against them, or lined up
+// with them. Each axis snaps on its own, to the nearest candidate.
+function snapPos(x, y, w, h, others, vw, vh, dist) {
+    var xs = [0, vw - w], ys = [0, vh - h];
+    others.forEach(function(o) {
+        xs.push(o.x - w, o.x + o.w, o.x, o.x + o.w - w);
+        ys.push(o.y - h, o.y + o.h, o.y, o.y + o.h - h);
+    });
+    function near(v, list) {
+        var best = v, gap = dist + 1;
+        list.forEach(function(c) {
+            var g = Math.abs(c - v);
+            if (g <= dist && g < gap) {
+                best = c;
+                gap = g;
+            }
+        });
+        return best;
+    }
+    return { x: near(x, xs), y: near(y, ys) };
+}
+
+// n boxes in a grid filling `area` ({ x, y, w, h }), `gap` px apart, row by row
+function tileRects(n, area, gap) {
+    if (!n) return [];
+    var cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+    var w = (area.w - gap * (cols - 1)) / cols, h = (area.h - gap * (rows - 1)) / rows;
+    var out = [];
+    for (var i = 0; i < n; i++) {
+        var c = i % cols, r = Math.floor(i / cols);
+        out.push({ x: Math.round(area.x + c * (w + gap)), y: Math.round(area.y + r * (h + gap)), w: Math.round(w), h: Math.round(h) });
+    }
+    return out;
+}
+
 // The HP graph's columns: for `cols` columns from t0 over `span` ms, the last reading in
 // each (gaps carry the previous one forward). points are [time, hp, phase, online, your
 // lifetime damage]; fog is [[start, end], ...]. Nothing after `cutoff` (the replay).

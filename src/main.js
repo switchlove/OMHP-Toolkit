@@ -25,6 +25,7 @@ function moveSections() {
     run("keys", shortcuts);
     run("filters", lineFilters);
     run("boxorder", bagBoxOrder);
+    clanFold();
     pinPanel();
     floatingPanels();
     run("loot", lootLog);

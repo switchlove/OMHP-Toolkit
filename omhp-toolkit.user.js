@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.27
+// @version      0.28
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -25,12 +25,14 @@
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
-//     dropdowns). [PIN] keeps the open panel above the others (drag the line under it
-//     to resize). [POP OUT] opens it in a floating window. BAG's loot-box cards are
-//     smaller so more fit across, and in the same order as SHOP. RANKS (30s) and HISTORY (60s) refresh
-//     while they're on screen.
-//   - Floating windows can be dragged, resized, minimised and faded, and you can
-//     have several open at once.
+//     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
+//     with its own resize line and [UNPIN]. [POP OUT] opens it in a floating window.
+//     BAG's loot-box cards are smaller so more fit across, and in the same order as
+//     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
+//     MEMBERS list folds away with [-] / [+] on its heading.
+//   - Floating windows can be dragged, resized, minimised and faded, and you can have
+//     several open at once. They snap to the screen's edges and to each other (hold
+//     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
 //   - Hides the clutter: the duplicate MESSAGES heading, the key hints and the
 //     footer (the site's error line stays).
 //
@@ -59,7 +61,8 @@
 //     box openings gave with the site's stated odds.
 //
 // TOP BAR
-//   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES
+//   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
+//     own CUSTOM colours, shareable as a code), FEATURES
 //     to switch parts of this script on or off (applies on reload), the loot alert
 //     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, and EXPORT / IMPORT
 //     of everything as a backup file.
@@ -72,6 +75,8 @@
 //     Alt+T opens [TOOLKIT].
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
+//   - HOVER CARDS: pause over a name in ATTACKS or CHAT for their place on this boss's
+//     board and their damage in the last 5 minutes.
 //   - [REPLAY] on the HP graph plays the boss's history back from the start.
 //   - STATS THEME: if Zephy's "1MHP Data Statistics" userscript is installed, its panel
 //     takes on this page's theme and highlight colour.
@@ -246,6 +251,61 @@
         if (points.length <= n) return points.slice();
         var out = [];
         for (var i = 0; i < n; i++) out.push(points[Math.round(i * (points.length - 1) / (n - 1))]);
+        return out;
+    }
+
+    // A theme as a short code to share: "OMHP1-", then the theme's colours (bg, bg-2, fg, dim,
+    // faint) and the highlight colour, as six hex colours without the "#"
+    var THEME_VARS = ["bg", "bg-2", "fg", "dim", "faint"];
+
+    function themeCode(vars, accent) {
+        return "OMHP1-" + THEME_VARS.map(function(v) { return vars[v] || "#000000"; }).concat([accent || "#ffb000"])
+            .map(function(hex) { return hex.replace("#", "").toLowerCase(); }).join("-");
+    }
+
+    // ...and back: { vars, accent }, or null if it isn't a theme code
+    function parseThemeCode(code) {
+        var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6})$/i);
+        if (!m) return null;
+        var hex = m[1].toLowerCase().split("-").map(function(h) { return "#" + h; });
+        var vars = {};
+        THEME_VARS.forEach(function(v, i) { vars[v] = hex[i]; });
+        return { vars: vars, accent: hex[5] };
+    }
+
+    // Snap a w x h box dragged to (x, y) to the edges of the view (vw x vh) and of other
+    // boxes ([{ x, y, w, h }]) when it comes within `dist` px: flush against them, or lined up
+    // with them. Each axis snaps on its own, to the nearest candidate.
+    function snapPos(x, y, w, h, others, vw, vh, dist) {
+        var xs = [0, vw - w], ys = [0, vh - h];
+        others.forEach(function(o) {
+            xs.push(o.x - w, o.x + o.w, o.x, o.x + o.w - w);
+            ys.push(o.y - h, o.y + o.h, o.y, o.y + o.h - h);
+        });
+        function near(v, list) {
+            var best = v, gap = dist + 1;
+            list.forEach(function(c) {
+                var g = Math.abs(c - v);
+                if (g <= dist && g < gap) {
+                    best = c;
+                    gap = g;
+                }
+            });
+            return best;
+        }
+        return { x: near(x, xs), y: near(y, ys) };
+    }
+
+    // n boxes in a grid filling `area` ({ x, y, w, h }), `gap` px apart, row by row
+    function tileRects(n, area, gap) {
+        if (!n) return [];
+        var cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
+        var w = (area.w - gap * (cols - 1)) / cols, h = (area.h - gap * (rows - 1)) / rows;
+        var out = [];
+        for (var i = 0; i < n; i++) {
+            var c = i % cols, r = Math.floor(i / cols);
+            out.push({ x: Math.round(area.x + c * (w + gap)), y: Math.round(area.y + r * (h + gap)), w: Math.round(w), h: Math.round(h) });
+        }
         return out;
     }
 
@@ -436,6 +496,22 @@
         }
         .omhp-filter-in:focus { border-color: var(--dim); outline: none; }
         .omhp-menu-hint { color: var(--dim); font-size: 10px; letter-spacing: .04em; }
+        /* HOVER CARDS: a player's place on this boss and their last 5 minutes */
+        .omhp-card {
+            position: fixed; z-index: 120; min-width: 200px; padding: 5px 8px; pointer-events: none;
+            background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+            font-size: 11px; line-height: 1.5; color: var(--fg); letter-spacing: .03em;
+        }
+        .omhp-card[hidden] { display: none; }
+        .omhp-card-name { color: var(--amber); letter-spacing: .1em; margin-bottom: 2px; }
+        .omhp-card div:not(.omhp-card-name) { display: flex; justify-content: space-between; gap: 12px; }
+        .omhp-card .k { color: var(--dim); letter-spacing: .08em; }
+        #feed .who, #chat-list .who { cursor: help; }
+        #chat-list .who-gear { cursor: pointer; }
+        /* [TOOLKIT] > CUSTOM: a colour picker per theme colour */
+        .omhp-menu-row[hidden] { display: none; }
+        .omhp-custom-pick { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--dim); letter-spacing: .06em; }
+        .omhp-custom-pick input { width: 22px; height: 16px; padding: 0; border: 1px solid var(--faint); background: none; cursor: pointer; }
 
         /* COMPACT: tighter lines and spacing everywhere */
         html.omhp-compact body { font-size: 13px; }
@@ -526,17 +602,33 @@
         .omhp-chests-row .dim { text-align: right; }
         #omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
 
-        /* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */
+        /* Pinned right panels (up to three): stacked on top, each scrolling on its own; the tab bar
+           switches the one below. Drag the line under one to resize it (it keeps that height). */
         #omhp-pinned {
-            flex: 0 1 auto; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
-            margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
+            /* Never squeezed into the panel below: it keeps its height (up to 65% of the column) and
+               scrolls itself past that. --omhp-pins (set by pinPanel) shares the room out. */
+            flex: none; max-height: 65%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+            display: flex; flex-direction: column;
         }
-        #omhp-pinned > .panel { min-height: 0; }
-        /* Drag the line under the pinned panel to share the column's height; it has a set
-           height once dragged */
-        #omhp-pinned.sized { flex: none; max-height: none; }
-        #omhp-pin-resize { flex: none; margin: -4px 0 4px; }
-        #omhp-pin-resize[hidden] { display: none; }
+        #omhp-pinned[hidden] { display: none; }
+        .omhp-pin-slot {
+            position: relative; flex: none; min-height: 60px; max-height: calc(60vh / var(--omhp-pins, 1)); overflow-y: auto;
+            overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
+        }
+        .omhp-pin-slot.sized { flex: none; max-height: none; }
+        .omhp-pin-slot > .panel { min-height: 0; }
+        .omhp-pin-x {
+            position: sticky; top: 0; float: right; z-index: 2; font-size: 10px; color: var(--faint);
+            background: var(--bg); padding: 0 2px;
+        }
+        .omhp-pin-x:hover { color: var(--fg); }
+        .omhp-pin-grip { flex: none; margin: -4px 0 4px; }
+        #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
+
+        /* CLAN: the MEMBERS list folds away (see clanFold) */
+        #panel-clan.omhp-clan-folded .clan-members { display: none; }
+        .omhp-clan-fold { font: inherit; color: var(--dim); padding: 0; }
+        .omhp-clan-fold:hover { color: var(--fg); }
 
         /* BAG: smaller loot-box cards so more fit across the right column */
         .col-side .box-row, .omhp-float .box-row { gap: 6px; }
@@ -694,6 +786,7 @@
         ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
         ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
         ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
+        ["cards", "HOVER CARDS", true],
         ["notify", "NOTIFY", false]
     ];
     var features = loadSaved(FEATURES_KEY);
@@ -715,11 +808,15 @@
         else document.documentElement.style.removeProperty("--amber");
     }
 
+    // Your own colours for the CUSTOM theme ([TOOLKIT] > THEME > CUSTOM)
+    var CUSTOM_THEME_KEY = "omhp.layout.customTheme";
+
     function applyTheme(name) {
         var root = document.documentElement.style;
         var theme = THEMES.filter(function(t) { return t.name === name; })[0];
-        ["bg", "bg-2", "fg", "dim", "faint"].forEach(function(v) {
-            if (theme && theme.vars) root.setProperty("--" + v, theme.vars[v]);
+        var vars = name === "CUSTOM" ? loadSaved(CUSTOM_THEME_KEY) : theme && theme.vars;
+        THEME_VARS.forEach(function(v) {
+            if (vars && vars[v]) root.setProperty("--" + v, vars[v]);
             else root.removeProperty("--" + v);
         });
     }
@@ -1218,7 +1315,7 @@
                         player: player.renderPlayer, inventory: player.renderInventory, shop: shop.renderShop
                     };
                     store.on("me", () => {
-                        document.querySelectorAll("#omhp-pinned > .panel, .omhp-float-body > .panel").forEach((p) => {
+                        document.querySelectorAll("#omhp-pinned .omhp-pin-slot > .panel, .omhp-float-body > .panel").forEach((p) => {
                             const key = p.id.replace(/^panel-/, "");
                             if (key === tabs.currentTab() || typeof draw[key] !== "function") return; // the site draws that one
                             try { draw[key](); } catch (e) { /* leave it as it was */ }
@@ -1229,6 +1326,107 @@
                     // The site changed its files: pinned panels and RANKS just won't refresh
                     const out = document.getElementById("omhp-boss-data");
                     if (out) out.dataset.fail = [out.dataset.fail, "PANEL REFRESH"].filter(Boolean).join(", ");
+                });
+            // Player hover cards (HOVER CARDS feature): pause over a name in ATTACKS or CHAT to
+            // see their place on this boss's board, and what they've done in the last 5
+            // minutes. Badge tags keep the site's own hover box. The board is fetched at most
+            // every 30s; it lists the top 10.
+            if (${isOn("cards")}) Promise.all([
+                import(${JSON.stringify(base + "store.js" + v)}),
+                import(${JSON.stringify(base + "api.js" + v)})
+            ])
+                .then(([store, api]) => {
+                    const card = document.createElement("div");
+                    card.className = "omhp-card";
+                    card.hidden = true;
+                    document.body.appendChild(card);
+                    let over = null, timer = 0, board = null, boardSeq = null, boardAt = 0;
+                    const num = (n) => Math.round(n).toLocaleString("en-US");
+
+                    const loadBoard = async () => {
+                        const seq = store.state.boss?.seq;
+                        if (!seq) return null;
+                        if (!board || boardSeq !== seq || Date.now() - boardAt > 30000) {
+                            boardSeq = seq;
+                            boardAt = Date.now();
+                            board = await api.getLeaderboard("boss:" + seq).catch(() => null);
+                        }
+                        return board;
+                    };
+                    // Their hits in the feed over the last 5 minutes (feed times are in seconds)
+                    const recent = (pid, name) => {
+                        const since = store.now() - 300;
+                        let dmg = 0, hits = 0;
+                        for (const e of store.state.feed ?? []) {
+                            if (e.t < since || typeof e.damage !== "number") continue;
+                            if (pid ? e.player_id !== pid : e.name !== name) continue;
+                            dmg += e.damage;
+                            hits++;
+                        }
+                        return { dmg, hits };
+                    };
+                    const line = (label, value) => {
+                        const row = document.createElement("div");
+                        const k = document.createElement("span");
+                        k.className = "k";
+                        k.textContent = label;
+                        const val = document.createElement("span");
+                        val.textContent = value;
+                        row.append(k, val);
+                        return row;
+                    };
+                    const place = (who) => {
+                        const r = who.getBoundingClientRect();
+                        card.style.left = Math.max(4, Math.min(r.left, window.innerWidth - card.offsetWidth - 4)) + "px";
+                        const below = r.bottom + 4;
+                        card.style.top = (below + card.offsetHeight > window.innerHeight ? r.top - card.offsetHeight - 4 : below) + "px";
+                    };
+                    const paint = (who, d) => {
+                        const head = document.createElement("div");
+                        head.className = "omhp-card-name";
+                        head.textContent = d.name + (d.isMe ? "  (you)" : "");
+                        const rows = [head];
+                        if (d.lb === undefined) rows.push(line("THIS BOSS", "loading…"));
+                        else if (!d.lb) rows.push(line("THIS BOSS", "no board right now"));
+                        else {
+                            const at = (key) => {
+                                if (d.isMe && d.lb.me?.[key]?.rank) return { rank: d.lb.me[key].rank, value: d.lb.me[key].value };
+                                const list = d.lb[key] ?? [];
+                                const i = list.findIndex((x) => d.pid ? x.player_id === d.pid : x.name === d.name);
+                                return i === -1 ? null : { rank: i + 1, value: list[i].value };
+                            };
+                            const dmg = at("damage"), atk = at("attacks");
+                            rows.push(line("THIS BOSS", dmg ? "#" + dmg.rank + " · " + num(dmg.value) + " dmg" : "not in the top 10"));
+                            if (atk) rows.push(line("ATTACKS", "#" + atk.rank + " · " + num(atk.value)));
+                        }
+                        rows.push(line("LAST 5 MIN", d.recent.hits ? num(d.recent.dmg) + " dmg · " + d.recent.hits + " hits" : "no hits in the feed"));
+                        card.replaceChildren(...rows);
+                        card.hidden = false;
+                        place(who);
+                    };
+                    const show = async (who) => {
+                        const name = who.textContent.trim();
+                        let pid = who.closest("li")?.dataset.pid || null;
+                        // A chat name has no id on it: find it in the feed
+                        if (!pid) pid = (store.state.feed ?? []).find((e) => e.name === name && e.player_id)?.player_id ?? null;
+                        const me = store.state.me;
+                        const d = { name, pid, isMe: !!me && (pid ? pid === me.id : name === me.name), recent: recent(pid, name) };
+                        paint(who, d);
+                        d.lb = await loadBoard();
+                        if (over === who) paint(who, d);
+                    };
+                    document.addEventListener("mouseover", (ev) => {
+                        const who = ev.target instanceof Element ? ev.target.closest("#feed .who, #chat-list .who") : null;
+                        if (who === over) return;
+                        over = who;
+                        clearTimeout(timer);
+                        card.hidden = true;
+                        if (who) timer = setTimeout(() => show(who), 300);
+                    });
+                })
+                .catch(() => {
+                    const out = document.getElementById("omhp-boss-data");
+                    if (out) out.dataset.fail = [out.dataset.fail, "HOVER CARDS"].filter(Boolean).join(", ");
                 });
         `;
         var script = document.createElement("script");
@@ -1843,8 +2041,9 @@
         });
         bar.addEventListener("pointermove", function(e) {
             if (!drag) return;
-            win.style.left = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - 80)) + "px";
-            win.style.top = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 30)) + "px";
+            var p = snapWindow(win, e.clientX - drag.dx, e.clientY - drag.dy, e.shiftKey);
+            win.style.left = p.x + "px";
+            win.style.top = p.y + "px";
         });
         bar.addEventListener("pointerup", function() { drag = null; });
         bar.addEventListener("pointercancel", function() { drag = null; });
@@ -2316,17 +2515,90 @@
         });
         row("COLOUR", swatches);
 
-        var themeBtns = THEMES.map(function(t) {
-            var b = choice(t.name, t.name === currentTheme, null, function() {
-                currentTheme = t.name;
-                var stored = t.vars ? t.name : null; // the default is stored as "no override"
-                applyTheme(stored);
-                save(THEME_KEY, stored);
-                themeBtns.forEach(function(x) { x.classList.toggle("on", x === b); });
+        // The themes, then CUSTOM: your own colours, edited below and shareable as a code
+        var themeBtns = THEMES.map(function(t) { return t.name; }).concat(["CUSTOM"]).map(function(name) {
+            var b = choice(name, name === currentTheme, name === "CUSTOM" ? "your own colours" : null, function() {
+                pickTheme(name);
             });
             return b;
         });
         row("THEME", themeBtns);
+
+        function pickTheme(name) {
+            currentTheme = name;
+            var t = THEMES.filter(function(x) { return x.name === name; })[0];
+            var stored = name === "CUSTOM" || (t && t.vars) ? name : null; // the default is stored as "no override"
+            if (name === "CUSTOM" && !Object.keys(loadSaved(CUSTOM_THEME_KEY)).length) save(CUSTOM_THEME_KEY, shownColours());
+            applyTheme(stored);
+            save(THEME_KEY, stored);
+            themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === name); });
+            paintCustom();
+        }
+
+        // The colours on screen now, as #rrggbb (where to start a CUSTOM theme from)
+        function shownColours() {
+            var cs = getComputedStyle(document.documentElement), out = {};
+            THEME_VARS.forEach(function(v) {
+                var c = cs.getPropertyValue("--" + v).trim().toLowerCase();
+                out[v] = /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
+            });
+            return out;
+        }
+
+        // CUSTOM: a colour picker for each of the theme's colours (changes show at once),
+        // SHARE to copy its code, USE CODE to apply someone else's
+        var customBody = row("CUSTOM", []);
+        var customRow = customBody.parentElement;
+        var pickers = THEME_VARS.map(function(v) {
+            var label = el("label", "omhp-custom-pick");
+            var input = el("input");
+            input.type = "color";
+            input.title = "the theme's " + v + " colour";
+            input.addEventListener("input", function() {
+                var vars = loadSaved(CUSTOM_THEME_KEY);
+                vars[v] = input.value;
+                save(CUSTOM_THEME_KEY, vars);
+                applyTheme("CUSTOM");
+            });
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(v.toUpperCase()));
+            customBody.appendChild(label);
+            return input;
+        });
+        var shareNote = el("span", "omhp-menu-hint");
+        customBody.appendChild(choice("SHARE", false, "copy this theme (and your highlight colour) as a code", function() {
+            var code = themeCode(loadSaved(CUSTOM_THEME_KEY), loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex);
+            var shown = function() { prompt("Your theme code:", code); };
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(code).then(function() { shareNote.textContent = "copied"; }, shown);
+            } else shown();
+        }));
+        customBody.appendChild(choice("USE CODE", false, "apply a theme code someone shared", function() {
+            var got = parseThemeCode(prompt("Paste a theme code (OMHP1-...):") || "");
+            if (!got) {
+                shareNote.textContent = "that isn't a theme code";
+                return;
+            }
+            save(CUSTOM_THEME_KEY, got.vars);
+            var accent = got.accent === ACCENTS[0].hex ? null : got.accent;
+            applyAccent(accent);
+            save(ACCENT_KEY, accent);
+            current = got.accent;
+            swatches.forEach(function(x) { x.classList.toggle("on", x.title === (ACCENTS.filter(function(a) { return a.hex === got.accent; })[0] || {}).name); });
+            shareNote.textContent = "applied";
+            pickTheme("CUSTOM");
+        }));
+        customBody.appendChild(shareNote);
+
+        function paintCustom() {
+            customRow.hidden = currentTheme !== "CUSTOM";
+            var vars = loadSaved(CUSTOM_THEME_KEY);
+            pickers.forEach(function(input, i) {
+                var c = vars[THEME_VARS[i]];
+                if (c && input.value !== c) input.value = c;
+            });
+        }
+        paintCustom();
 
         // Features on/off: takes effect on the next reload
         var note = el("div", "omhp-menu-note", "reload the page to apply");
@@ -2409,6 +2681,9 @@
                 del.classList.add("omhp-del");
                 layoutBody.appendChild(del);
             });
+            layoutBody.appendChild(choice("TILE", false, "arrange the open pop-out windows in a grid (drag a window with Shift held to stop it snapping)", function() {
+                if (tileWindows) tileWindows();
+            }));
             layoutBody.appendChild(choice("+ SAVE", false, "save the current layout under a name", function() {
                 var name = (prompt("Name this layout:") || "").trim().toUpperCase().slice(0, 20);
                 if (!name || BUILT_IN[name]) return;
@@ -2914,10 +3189,15 @@
         every(5000, sample);
     }
 
-    // Set once the saved pin (if any) is back, so pop-out windows restore after it
+    // Set once the saved pins (if any) are back, so pop-out windows restore after them
     var pinRestored = false;
+    // Unpins one panel by its tab (set by pinPanel); a pop-out window uses it before taking
+    // a pinned panel
+    var unpinKey = null;
+    var MAX_PINS = 3;
 
-    // [PIN] in the right column's tab bar: keep the open panel showing above the others.
+    // [PIN] in the right column's tab bar: keep the open panel showing above the others. Up to
+    // three panels can be pinned, stacked, each with its own resize line and [UNPIN].
     function pinPanel() {
         var side = document.querySelector("#app .col-side");
         var tabs = document.getElementById("tabs");
@@ -2930,120 +3210,173 @@
         box.hidden = true;
         tabs.insertAdjacentElement("afterend", box);
 
-        // The line under the pinned panel: drag to resize, double-click to reset
+        // Each pinned panel's height once its line has been dragged (by tab); before v0.28
+        // there was one pin and one number
         var PIN_H_KEY = "omhp.layout.pinH";
-        var grip = document.createElement("div");
-        grip.id = "omhp-pin-resize";
-        grip.className = "left-resize";
-        grip.title = "drag to resize, double-click to reset";
-        grip.hidden = true;
-        box.insertAdjacentElement("afterend", grip);
-
-        function setPinHeight(px) {
-            box.classList.toggle("sized", !!px);
-            box.style.height = px ? Math.round(px) + "px" : "";
-        }
-        setPinHeight(loadJSON(PIN_H_KEY, null));
-
-        var isDouble = makeDoublePress();
-        var dragFrom = null; // { y, h } while dragging
-        grip.addEventListener("pointerdown", function(e) {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            if (isDouble()) {
-                setPinHeight(null);
-                save(PIN_H_KEY, null);
-                return;
-            }
-            grip.setPointerCapture(e.pointerId);
-            grip.classList.add("dragging");
-            dragFrom = { y: e.clientY, h: box.offsetHeight };
-        });
-        grip.addEventListener("pointermove", function(e) {
-            if (!dragFrom) return;
-            // Leave the panel below at least 120px
-            var most = side.clientHeight - tabs.offsetHeight - 120;
-            setPinHeight(Math.max(60, Math.min(most, dragFrom.h + e.clientY - dragFrom.y)));
-        });
-        function endDrag() {
-            if (!dragFrom) return;
-            dragFrom = null;
-            grip.classList.remove("dragging");
-            save(PIN_H_KEY, box.offsetHeight);
-        }
-        grip.addEventListener("pointerup", endDrag);
-        grip.addEventListener("pointercancel", endDrag);
+        var heights = loadJSON(PIN_H_KEY, {});
+        var oldHeight = typeof heights === "number" ? heights : null;
+        if (!heights || typeof heights !== "object") heights = {};
 
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn-text omhp-pin";
         tabs.appendChild(btn);
 
-        var pinned = null; // { key, panel, home } while something is pinned
-        var keepShown = new MutationObserver(function() {
-            if (pinned && pinned.panel.hidden) pinned.panel.hidden = false;
-        });
+        var pins = []; // { key, panel, home, slot, grip, keepShown }, top to bottom
+
+        function selectedKey() {
+            var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');
+            return sel ? sel.dataset.tab : null;
+        }
+
+        function find(key) {
+            return pins.filter(function(p) { return p.key === key; })[0] || null;
+        }
 
         function paint() {
-            btn.textContent = pinned ? "[UNPIN]" : "[PIN]";
-            btn.title = pinned ? "stop keeping " + pinned.key.toUpperCase() + " on top" : "keep the open panel on top";
+            var k = selectedKey(), on = find(k);
+            var full = pins.length >= MAX_PINS;
+            btn.textContent = on ? "[UNPIN]" : "[PIN]";
+            btn.disabled = !on && (!k || full || LEFT_TABS.indexOf(k) !== -1);
+            btn.title = on ? "stop keeping " + k.toUpperCase() + " on top"
+                : full ? "up to " + MAX_PINS + " panels can be pinned" : "keep the open panel on top";
+            box.hidden = !pins.length;
+            box.style.setProperty("--omhp-pins", String(Math.max(1, pins.length))); // see style.css
+        }
+
+        function setHeight(p, px) {
+            p.slot.classList.toggle("sized", !!px);
+            p.slot.style.height = px ? Math.round(px) + "px" : "";
+        }
+
+        // The line under a pinned panel: drag to resize, double-click to reset
+        function makeGrip(p) {
+            var grip = document.createElement("div");
+            grip.className = "left-resize omhp-pin-grip";
+            grip.title = "drag to resize, double-click to reset";
+            var isDouble = makeDoublePress();
+            var dragFrom = null; // { y, h } while dragging
+            grip.addEventListener("pointerdown", function(e) {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                if (isDouble()) {
+                    setHeight(p, null);
+                    delete heights[p.key];
+                    save(PIN_H_KEY, heights);
+                    return;
+                }
+                grip.setPointerCapture(e.pointerId);
+                grip.classList.add("dragging");
+                dragFrom = { y: e.clientY, h: p.slot.offsetHeight };
+            });
+            grip.addEventListener("pointermove", function(e) {
+                if (!dragFrom) return;
+                // At most the pinned area's own height (65% of the column, see style.css); past
+                // that the pins scroll together, so the panel below keeps its room
+                var most = Math.max(120, Math.round(side.clientHeight * 0.65) - grip.offsetHeight);
+                setHeight(p, Math.max(60, Math.min(most, dragFrom.h + e.clientY - dragFrom.y)));
+            });
+            function endDrag() {
+                if (!dragFrom) return;
+                dragFrom = null;
+                grip.classList.remove("dragging");
+                heights[p.key] = p.slot.offsetHeight;
+                save(PIN_H_KEY, heights);
+            }
+            grip.addEventListener("pointerup", endDrag);
+            grip.addEventListener("pointercancel", endDrag);
+            return grip;
         }
 
         function pin(key) {
             var panel = document.getElementById("panel-" + key);
-            if (!panel || LEFT_TABS.indexOf(key) !== -1) return;
-            pinned = { key: key, panel: panel, home: panel.nextSibling };
-            box.appendChild(panel);
-            box.hidden = false;
-            grip.hidden = false;
+            if (!panel || LEFT_TABS.indexOf(key) !== -1 || find(key) || pins.length >= MAX_PINS) return;
+            var slot = document.createElement("div");
+            slot.className = "omhp-pin-slot";
+            var x = document.createElement("button");
+            x.type = "button";
+            x.className = "btn-text omhp-pin-x";
+            x.textContent = "[UNPIN]";
+            x.title = "stop keeping " + key.toUpperCase() + " on top";
+            x.addEventListener("click", function() { unpin(key); });
+            var p = {
+                key: key, panel: panel, home: panel.nextSibling, slot: slot,
+                keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
+            };
+            slot.appendChild(x);
+            slot.appendChild(panel);
+            p.grip = makeGrip(p);
+            box.appendChild(slot);
+            box.appendChild(p.grip);
             panel.hidden = false;
-            keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-            save(PIN_KEY, key);
+            p.keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+            setHeight(p, heights[key]);
+            pins.push(p);
+            save(PIN_KEY, pins.map(function(q) { return q.key; }));
             paint();
         }
 
-        function unpin() {
-            if (!pinned) return;
-            keepShown.disconnect();
-            side.insertBefore(pinned.panel, pinned.home && pinned.home.parentNode === side ? pinned.home : null);
-            var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');
-            pinned.panel.hidden = !(sel && sel.dataset.tab === pinned.key);
-            pinned = null;
-            box.hidden = true;
-            grip.hidden = true;
-            save(PIN_KEY, null);
+        function unpin(key) {
+            var p = find(key);
+            if (!p) return;
+            p.keepShown.disconnect();
+            side.insertBefore(p.panel, p.home && p.home.parentNode === side ? p.home : null);
+            p.panel.hidden = selectedKey() !== key;
+            p.slot.remove();
+            p.grip.remove();
+            pins.splice(pins.indexOf(p), 1);
+            save(PIN_KEY, pins.map(function(q) { return q.key; }));
             paint();
         }
+        unpinKey = unpin;
 
         btn.addEventListener("click", function() {
-            if (pinned) return unpin();
-            var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');
-            if (sel) pin(sel.dataset.tab);
+            var k = selectedKey();
+            if (!k) return;
+            if (find(k)) unpin(k);
+            else pin(k);
         });
-
+        new MutationObserver(paint).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
         paint();
+
         var saved = loadJSON(PIN_KEY, null);
-        if (!saved) {
+        if (typeof saved === "string") saved = [saved]; // one pin, before v0.28
+        if (!Array.isArray(saved) || !saved.length) {
             pinRestored = true;
             return;
         }
-        // Load it once by picking its tab, then pin it (after the site restores its own tab)
+        if (oldHeight && heights[saved[0]] === undefined) heights[saved[0]] = oldHeight;
+        // Load each by picking its tab, then pin it (after the site restores its own tab)
         whenReady(900, tabsReady, function() {
-            var t = tabButton(saved);
-            if (t && !t.hidden) {
-                var before = document.querySelector('#tabs [role=tab][aria-selected="true"]');
+            var before = document.querySelector('#tabs [role=tab][aria-selected="true"]');
+            saved.slice(0, MAX_PINS).forEach(function(key) {
+                var t = tabButton(key);
+                if (!t || t.hidden) return;
                 t.click();
-                pin(saved);
-                if (before && before !== t) before.click();
-            }
+                pin(key);
+            });
+            if (before && !before.hidden) before.click();
             pinRestored = true;
         });
     }
-
     // Pop out any panel into a floating window you can drag and resize, several at once:
     // [POP OUT] in the tab bar for the open right-hand panel, and the ⧉ button on each
     // left-column section. DESIGN also gets its drawing grid scaled up to fill the window.
     var popOutPanel = null; // set by floatingPanels(); used by the left sections' ⧉ buttons
+    var tileWindows = null; // set by floatingPanels(); [TOOLKIT] > LAYOUT > TILE
+
+    // Where a window dragged to (x, y) goes: snapped to the screen's edges and to the other
+    // floating windows' edges within 10px (see snapPos), unless Shift is held; kept on screen
+    function snapWindow(win, x, y, free) {
+        var r = win.getBoundingClientRect();
+        var others = Array.prototype.filter.call(document.querySelectorAll(".omhp-float"), function(w) { return w !== win; })
+            .map(function(w) {
+                var b = w.getBoundingClientRect();
+                return { x: b.left, y: b.top, w: b.width, h: b.height };
+            });
+        var p = free ? { x: x, y: y } : snapPos(x, y, r.width, r.height, others, window.innerWidth, window.innerHeight, 10);
+        return { x: Math.max(0, Math.min(p.x, window.innerWidth - 80)), y: Math.max(0, Math.min(p.y, window.innerHeight - 30)) };
+    }
 
     function floatingPanels() {
         var tabs = document.getElementById("tabs");
@@ -3218,8 +3551,9 @@
             });
             bar.addEventListener("pointermove", function(e) {
                 if (!drag) return;
-                win.style.left = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - 80)) + "px";
-                win.style.top = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 30)) + "px";
+                var p = snapWindow(win, e.clientX - drag.dx, e.clientY - drag.dy, e.shiftKey);
+                win.style.left = p.x + "px";
+                win.style.top = p.y + "px";
             });
             function endDrag() {
                 if (!drag) return;
@@ -3250,8 +3584,7 @@
             if (!panel) return;
             if (!info) {
                 // Right-hand panel: unpin it first, and let the site build/load it by picking its tab
-                var pinBtn = document.querySelector("#tabs .omhp-pin");
-                if (panel.parentElement && panel.parentElement.id === "omhp-pinned" && pinBtn) pinBtn.click();
+                if (unpinKey) unpinKey(key);
                 var t = tabButton(key);
                 if (!t || t.hidden) return;
                 if (t.getAttribute("aria-selected") !== "true") t.click();
@@ -3300,6 +3633,24 @@
         new MutationObserver(syncButton).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
         syncButton();
         popOutPanel = popOut;
+
+        // TILE: every open window that isn't minimised, in a grid over the right two-thirds of
+        // the screen (the boss column stays clear); the new places are remembered
+        tileWindows = function() {
+            var wins = Array.prototype.filter.call(document.querySelectorAll(".omhp-float"), function(w) {
+                return !w.classList.contains("minimised");
+            });
+            var area = { x: Math.round(window.innerWidth / 3), y: 10, w: Math.round(window.innerWidth * 2 / 3) - 10, h: window.innerHeight - 20 };
+            tileRects(wins.length, area, 8).forEach(function(r, i) {
+                var w = wins[i];
+                w.style.left = r.x + "px";
+                w.style.top = r.y + "px";
+                w.style.width = r.w + "px";
+                w.style.height = r.h + "px";
+                if (w.dataset.key && open[w.dataset.key]) remember(w.dataset.key);
+            });
+            window.dispatchEvent(new Event("resize"));
+        };
 
         // Re-open the windows that were open last time (after the site restores its tabs and pins)
         whenReady(1300, function() { return pinRestored && tabsReady(); }, function() {
@@ -3516,6 +3867,43 @@
         apply();
     }
 
+
+    // CLAN: [-] / [+] on the MEMBERS heading folds the member list away (remembered). The site
+    // redraws the panel whenever the clan changes, so the button goes back on after every redraw
+    // and the list is hidden with a class on the panel, which the redraws leave alone.
+    var CLAN_FOLD_KEY = "omhp.layout.clanFold";
+
+    function clanFold() {
+        var panel = document.getElementById("panel-clan");
+        if (!panel) return;
+        var folded = loadJSON(CLAN_FOLD_KEY, false) === true;
+
+        function apply() {
+            panel.classList.toggle("omhp-clan-folded", folded);
+            var list = panel.querySelector(".clan-members");
+            var head = list && list.previousElementSibling;
+            if (!head || !head.classList.contains("panel-h")) return;
+            var b = head.querySelector(".omhp-clan-fold");
+            if (!b) {
+                b = document.createElement("button");
+                b.type = "button";
+                b.className = "btn-text omhp-clan-fold";
+                b.addEventListener("click", function() {
+                    folded = !folded;
+                    save(CLAN_FOLD_KEY, folded);
+                    apply();
+                });
+                head.insertBefore(b, head.firstChild);
+            }
+            var text = folded ? "[+] " : "[-] ";
+            if (b.textContent !== text) b.textContent = text;
+            b.title = folded ? "show the " + list.children.length + " members" : "hide the member list";
+            b.setAttribute("aria-expanded", String(!folded));
+        }
+
+        new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+        apply();
+    }
     // Features that couldn't start (the site changed) and page-script imports that failed,
     // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
     var broken = [];
@@ -3571,6 +3959,7 @@
         run("keys", shortcuts);
         run("filters", lineFilters);
         run("boxorder", bagBoxOrder);
+        clanFold();
         pinPanel();
         floatingPanels();
         run("loot", lootLog);

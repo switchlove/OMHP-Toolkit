@@ -64,6 +64,7 @@ var FEATURES = [
     ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
     ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
     ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
+    ["cards", "HOVER CARDS", true],
     ["notify", "NOTIFY", false]
 ];
 var features = loadSaved(FEATURES_KEY);
@@ -85,11 +86,15 @@ function applyAccent(hex) {
     else document.documentElement.style.removeProperty("--amber");
 }
 
+// Your own colours for the CUSTOM theme ([TOOLKIT] > THEME > CUSTOM)
+var CUSTOM_THEME_KEY = "omhp.layout.customTheme";
+
 function applyTheme(name) {
     var root = document.documentElement.style;
     var theme = THEMES.filter(function(t) { return t.name === name; })[0];
-    ["bg", "bg-2", "fg", "dim", "faint"].forEach(function(v) {
-        if (theme && theme.vars) root.setProperty("--" + v, theme.vars[v]);
+    var vars = name === "CUSTOM" ? loadSaved(CUSTOM_THEME_KEY) : theme && theme.vars;
+    THEME_VARS.forEach(function(v) {
+        if (vars && vars[v]) root.setProperty("--" + v, vars[v]);
         else root.removeProperty("--" + v);
     });
 }

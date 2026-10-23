@@ -129,6 +129,37 @@ test("shrinkPoints keeps the first and last, evenly spread", () => {
     same(lib.shrinkPoints(pts, 20).map((p) => p[0]), pts.map((p) => p[0]));
 });
 
+test("themeCode and parseThemeCode round-trip", () => {
+    const vars = { bg: "#0B1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550" };
+    const code = lib.themeCode(vars, "#FFB000");
+    assert.equal(code, "OMHP1-0b1020-121a30-dfe6f5-7f8aa6-2c3550-ffb000");
+    same(lib.parseThemeCode(" " + code + " "), {
+        vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550" }, accent: "#ffb000"
+    });
+    assert.equal(lib.parseThemeCode("OMHP1-0b1020-121a30"), null);
+    assert.equal(lib.parseThemeCode("hello"), null);
+    assert.equal(lib.parseThemeCode(null), null);
+});
+
+test("snapPos: to the view's edges and to another box", () => {
+    // Near the left and top edges
+    same(lib.snapPos(6, 8, 100, 50, [], 1000, 800, 10), { x: 0, y: 0 });
+    // Near the right edge; too far from the bottom to snap
+    same(lib.snapPos(895, 400, 100, 50, [], 1000, 800, 10), { x: 900, y: 400 });
+    // Flush against another box's right side, lined up with its top
+    same(lib.snapPos(305, 103, 100, 50, [{ x: 100, y: 100, w: 200, h: 200 }], 1000, 800, 10), { x: 300, y: 100 });
+    // Out of reach: stays put
+    same(lib.snapPos(500, 500, 100, 50, [{ x: 100, y: 100, w: 200, h: 200 }], 1000, 800, 10), { x: 500, y: 500 });
+});
+
+test("tileRects: a grid filling the area", () => {
+    same(lib.tileRects(0, { x: 0, y: 0, w: 100, h: 100 }, 0), []);
+    same(lib.tileRects(1, { x: 10, y: 20, w: 300, h: 200 }, 8), [{ x: 10, y: 20, w: 300, h: 200 }]);
+    same(lib.tileRects(3, { x: 0, y: 0, w: 208, h: 108 }, 8), [
+        { x: 0, y: 0, w: 100, h: 50 }, { x: 108, y: 0, w: 100, h: 50 }, { x: 0, y: 58, w: 100, h: 50 }
+    ]);
+});
+
 test("bucketColumns: carries values forward, your damage per column, fog", () => {
     // [time, hp, phase, online, your lifetime damage]
     const pts = [[0, 100, 1, 5, 1000], [10, 90, 1, 6, 1010], [30, 70, 2, 7, 1050]];

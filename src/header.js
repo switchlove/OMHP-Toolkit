@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.27
+// @version      0.28
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -25,12 +25,14 @@
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
-//     dropdowns). [PIN] keeps the open panel above the others (drag the line under it
-//     to resize). [POP OUT] opens it in a floating window. BAG's loot-box cards are
-//     smaller so more fit across, and in the same order as SHOP. RANKS (30s) and HISTORY (60s) refresh
-//     while they're on screen.
-//   - Floating windows can be dragged, resized, minimised and faded, and you can
-//     have several open at once.
+//     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
+//     with its own resize line and [UNPIN]. [POP OUT] opens it in a floating window.
+//     BAG's loot-box cards are smaller so more fit across, and in the same order as
+//     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
+//     MEMBERS list folds away with [-] / [+] on its heading.
+//   - Floating windows can be dragged, resized, minimised and faded, and you can have
+//     several open at once. They snap to the screen's edges and to each other (hold
+//     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
 //   - Hides the clutter: the duplicate MESSAGES heading, the key hints and the
 //     footer (the site's error line stays).
 //
@@ -59,7 +61,8 @@
 //     box openings gave with the site's stated odds.
 //
 // TOP BAR
-//   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), FEATURES
+//   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
+//     own CUSTOM colours, shareable as a code), FEATURES
 //     to switch parts of this script on or off (applies on reload), the loot alert
 //     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, and EXPORT / IMPORT
 //     of everything as a backup file.
@@ -72,6 +75,8 @@
 //     Alt+T opens [TOOLKIT].
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
+//   - HOVER CARDS: pause over a name in ATTACKS or CHAT for their place on this boss's
+//     board and their damage in the last 5 minutes.
 //   - [REPLAY] on the HP graph plays the boss's history back from the start.
 //   - STATS THEME: if Zephy's "1MHP Data Statistics" userscript is installed, its panel
 //     takes on this page's theme and highlight colour.

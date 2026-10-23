@@ -23,3 +23,40 @@ function bagBoxOrder() {
     apply();
 }
 
+
+// CLAN: [-] / [+] on the MEMBERS heading folds the member list away (remembered). The site
+// redraws the panel whenever the clan changes, so the button goes back on after every redraw
+// and the list is hidden with a class on the panel, which the redraws leave alone.
+var CLAN_FOLD_KEY = "omhp.layout.clanFold";
+
+function clanFold() {
+    var panel = document.getElementById("panel-clan");
+    if (!panel) return;
+    var folded = loadJSON(CLAN_FOLD_KEY, false) === true;
+
+    function apply() {
+        panel.classList.toggle("omhp-clan-folded", folded);
+        var list = panel.querySelector(".clan-members");
+        var head = list && list.previousElementSibling;
+        if (!head || !head.classList.contains("panel-h")) return;
+        var b = head.querySelector(".omhp-clan-fold");
+        if (!b) {
+            b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-text omhp-clan-fold";
+            b.addEventListener("click", function() {
+                folded = !folded;
+                save(CLAN_FOLD_KEY, folded);
+                apply();
+            });
+            head.insertBefore(b, head.firstChild);
+        }
+        var text = folded ? "[+] " : "[-] ";
+        if (b.textContent !== text) b.textContent = text;
+        b.title = folded ? "show the " + list.children.length + " members" : "hide the member list";
+        b.setAttribute("aria-expanded", String(!folded));
+    }
+
+    new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+    apply();
+}

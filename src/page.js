@@ -135,7 +135,7 @@ function paintAccount() {
                     player: player.renderPlayer, inventory: player.renderInventory, shop: shop.renderShop
                 };
                 store.on("me", () => {
-                    document.querySelectorAll("#omhp-pinned > .panel, .omhp-float-body > .panel").forEach((p) => {
+                    document.querySelectorAll("#omhp-pinned .omhp-pin-slot > .panel, .omhp-float-body > .panel").forEach((p) => {
                         const key = p.id.replace(/^panel-/, "");
                         if (key === tabs.currentTab() || typeof draw[key] !== "function") return; // the site draws that one
                         try { draw[key](); } catch (e) { /* leave it as it was */ }
@@ -146,6 +146,107 @@ function paintAccount() {
                 // The site changed its files: pinned panels and RANKS just won't refresh
                 const out = document.getElementById("omhp-boss-data");
                 if (out) out.dataset.fail = [out.dataset.fail, "PANEL REFRESH"].filter(Boolean).join(", ");
+            });
+        // Player hover cards (HOVER CARDS feature): pause over a name in ATTACKS or CHAT to
+        // see their place on this boss's board, and what they've done in the last 5
+        // minutes. Badge tags keep the site's own hover box. The board is fetched at most
+        // every 30s; it lists the top 10.
+        if (${isOn("cards")}) Promise.all([
+            import(${JSON.stringify(base + "store.js" + v)}),
+            import(${JSON.stringify(base + "api.js" + v)})
+        ])
+            .then(([store, api]) => {
+                const card = document.createElement("div");
+                card.className = "omhp-card";
+                card.hidden = true;
+                document.body.appendChild(card);
+                let over = null, timer = 0, board = null, boardSeq = null, boardAt = 0;
+                const num = (n) => Math.round(n).toLocaleString("en-US");
+
+                const loadBoard = async () => {
+                    const seq = store.state.boss?.seq;
+                    if (!seq) return null;
+                    if (!board || boardSeq !== seq || Date.now() - boardAt > 30000) {
+                        boardSeq = seq;
+                        boardAt = Date.now();
+                        board = await api.getLeaderboard("boss:" + seq).catch(() => null);
+                    }
+                    return board;
+                };
+                // Their hits in the feed over the last 5 minutes (feed times are in seconds)
+                const recent = (pid, name) => {
+                    const since = store.now() - 300;
+                    let dmg = 0, hits = 0;
+                    for (const e of store.state.feed ?? []) {
+                        if (e.t < since || typeof e.damage !== "number") continue;
+                        if (pid ? e.player_id !== pid : e.name !== name) continue;
+                        dmg += e.damage;
+                        hits++;
+                    }
+                    return { dmg, hits };
+                };
+                const line = (label, value) => {
+                    const row = document.createElement("div");
+                    const k = document.createElement("span");
+                    k.className = "k";
+                    k.textContent = label;
+                    const val = document.createElement("span");
+                    val.textContent = value;
+                    row.append(k, val);
+                    return row;
+                };
+                const place = (who) => {
+                    const r = who.getBoundingClientRect();
+                    card.style.left = Math.max(4, Math.min(r.left, window.innerWidth - card.offsetWidth - 4)) + "px";
+                    const below = r.bottom + 4;
+                    card.style.top = (below + card.offsetHeight > window.innerHeight ? r.top - card.offsetHeight - 4 : below) + "px";
+                };
+                const paint = (who, d) => {
+                    const head = document.createElement("div");
+                    head.className = "omhp-card-name";
+                    head.textContent = d.name + (d.isMe ? "  (you)" : "");
+                    const rows = [head];
+                    if (d.lb === undefined) rows.push(line("THIS BOSS", "loading…"));
+                    else if (!d.lb) rows.push(line("THIS BOSS", "no board right now"));
+                    else {
+                        const at = (key) => {
+                            if (d.isMe && d.lb.me?.[key]?.rank) return { rank: d.lb.me[key].rank, value: d.lb.me[key].value };
+                            const list = d.lb[key] ?? [];
+                            const i = list.findIndex((x) => d.pid ? x.player_id === d.pid : x.name === d.name);
+                            return i === -1 ? null : { rank: i + 1, value: list[i].value };
+                        };
+                        const dmg = at("damage"), atk = at("attacks");
+                        rows.push(line("THIS BOSS", dmg ? "#" + dmg.rank + " · " + num(dmg.value) + " dmg" : "not in the top 10"));
+                        if (atk) rows.push(line("ATTACKS", "#" + atk.rank + " · " + num(atk.value)));
+                    }
+                    rows.push(line("LAST 5 MIN", d.recent.hits ? num(d.recent.dmg) + " dmg · " + d.recent.hits + " hits" : "no hits in the feed"));
+                    card.replaceChildren(...rows);
+                    card.hidden = false;
+                    place(who);
+                };
+                const show = async (who) => {
+                    const name = who.textContent.trim();
+                    let pid = who.closest("li")?.dataset.pid || null;
+                    // A chat name has no id on it: find it in the feed
+                    if (!pid) pid = (store.state.feed ?? []).find((e) => e.name === name && e.player_id)?.player_id ?? null;
+                    const me = store.state.me;
+                    const d = { name, pid, isMe: !!me && (pid ? pid === me.id : name === me.name), recent: recent(pid, name) };
+                    paint(who, d);
+                    d.lb = await loadBoard();
+                    if (over === who) paint(who, d);
+                };
+                document.addEventListener("mouseover", (ev) => {
+                    const who = ev.target instanceof Element ? ev.target.closest("#feed .who, #chat-list .who") : null;
+                    if (who === over) return;
+                    over = who;
+                    clearTimeout(timer);
+                    card.hidden = true;
+                    if (who) timer = setTimeout(() => show(who), 300);
+                });
+            })
+            .catch(() => {
+                const out = document.getElementById("omhp-boss-data");
+                if (out) out.dataset.fail = [out.dataset.fail, "HOVER CARDS"].filter(Boolean).join(", ");
             });
     `;
     var script = document.createElement("script");

@@ -445,8 +445,9 @@ function openBossGraph(seq, name) {
     });
     bar.addEventListener("pointermove", function(e) {
         if (!drag) return;
-        win.style.left = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - 80)) + "px";
-        win.style.top = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 30)) + "px";
+        var p = snapWindow(win, e.clientX - drag.dx, e.clientY - drag.dy, e.shiftKey);
+        win.style.left = p.x + "px";
+        win.style.top = p.y + "px";
     });
     bar.addEventListener("pointerup", function() { drag = null; });
     bar.addEventListener("pointercancel", function() { drag = null; });

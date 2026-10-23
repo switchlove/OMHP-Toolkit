@@ -2,6 +2,20 @@
 // [POP OUT] in the tab bar for the open right-hand panel, and the ⧉ button on each
 // left-column section. DESIGN also gets its drawing grid scaled up to fill the window.
 var popOutPanel = null; // set by floatingPanels(); used by the left sections' ⧉ buttons
+var tileWindows = null; // set by floatingPanels(); [TOOLKIT] > LAYOUT > TILE
+
+// Where a window dragged to (x, y) goes: snapped to the screen's edges and to the other
+// floating windows' edges within 10px (see snapPos), unless Shift is held; kept on screen
+function snapWindow(win, x, y, free) {
+    var r = win.getBoundingClientRect();
+    var others = Array.prototype.filter.call(document.querySelectorAll(".omhp-float"), function(w) { return w !== win; })
+        .map(function(w) {
+            var b = w.getBoundingClientRect();
+            return { x: b.left, y: b.top, w: b.width, h: b.height };
+        });
+    var p = free ? { x: x, y: y } : snapPos(x, y, r.width, r.height, others, window.innerWidth, window.innerHeight, 10);
+    return { x: Math.max(0, Math.min(p.x, window.innerWidth - 80)), y: Math.max(0, Math.min(p.y, window.innerHeight - 30)) };
+}
 
 function floatingPanels() {
     var tabs = document.getElementById("tabs");
@@ -176,8 +190,9 @@ function floatingPanels() {
         });
         bar.addEventListener("pointermove", function(e) {
             if (!drag) return;
-            win.style.left = Math.max(0, Math.min(e.clientX - drag.dx, window.innerWidth - 80)) + "px";
-            win.style.top = Math.max(0, Math.min(e.clientY - drag.dy, window.innerHeight - 30)) + "px";
+            var p = snapWindow(win, e.clientX - drag.dx, e.clientY - drag.dy, e.shiftKey);
+            win.style.left = p.x + "px";
+            win.style.top = p.y + "px";
         });
         function endDrag() {
             if (!drag) return;
@@ -208,8 +223,7 @@ function floatingPanels() {
         if (!panel) return;
         if (!info) {
             // Right-hand panel: unpin it first, and let the site build/load it by picking its tab
-            var pinBtn = document.querySelector("#tabs .omhp-pin");
-            if (panel.parentElement && panel.parentElement.id === "omhp-pinned" && pinBtn) pinBtn.click();
+            if (unpinKey) unpinKey(key);
             var t = tabButton(key);
             if (!t || t.hidden) return;
             if (t.getAttribute("aria-selected") !== "true") t.click();
@@ -258,6 +272,24 @@ function floatingPanels() {
     new MutationObserver(syncButton).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
     syncButton();
     popOutPanel = popOut;
+
+    // TILE: every open window that isn't minimised, in a grid over the right two-thirds of
+    // the screen (the boss column stays clear); the new places are remembered
+    tileWindows = function() {
+        var wins = Array.prototype.filter.call(document.querySelectorAll(".omhp-float"), function(w) {
+            return !w.classList.contains("minimised");
+        });
+        var area = { x: Math.round(window.innerWidth / 3), y: 10, w: Math.round(window.innerWidth * 2 / 3) - 10, h: window.innerHeight - 20 };
+        tileRects(wins.length, area, 8).forEach(function(r, i) {
+            var w = wins[i];
+            w.style.left = r.x + "px";
+            w.style.top = r.y + "px";
+            w.style.width = r.w + "px";
+            w.style.height = r.h + "px";
+            if (w.dataset.key && open[w.dataset.key]) remember(w.dataset.key);
+        });
+        window.dispatchEvent(new Event("resize"));
+    };
 
     // Re-open the windows that were open last time (after the site restores its tabs and pins)
     whenReady(1300, function() { return pinRestored && tabsReady(); }, function() {

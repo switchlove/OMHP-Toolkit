@@ -21,10 +21,11 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - Drag the gaps between columns to resize them. Double-click any drag handle to reset it.
 - The boss column and the right column stay pinned in view while you scroll.
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
-- **[PIN]** keeps the open panel above the others. Drag the line under it to split the column's height between the two panels. **[POP OUT]** opens it in a floating window.
+- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]** and a line under it you can drag to resize it. **[POP OUT]** opens the open panel in a floating window.
 - BAG's loot-box cards are smaller, so more fit across the right column, and they're in the same order as SHOP (**BOX ORDER** in FEATURES).
+- CLAN's MEMBERS list folds away with **[-]** / **[+]** on its heading, and stays folded until you open it again.
 - RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
-- Floating windows can be dragged, resized, minimised and faded, and several can be open at once.
+- Floating windows can be dragged, resized, minimised and faded, and several can be open at once. They snap to the screen's edges and to each other while you drag (hold Shift to place one freely), and **TILE** (in [TOOLKIT] → LAYOUT) lays them all out in a grid.
 - Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
 
 ### Boss
@@ -43,6 +44,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - **Alt+1…9** picks a tab in the right column, **Alt+P** pins or unpins, **Alt+O** pops it out and **Alt+T** opens [TOOLKIT]. The site's own keys (attack, U, S, 1–3) are untouched.
 - **FILTER** on the ATTACKS and CHAT headers: hide lines with any of some words or names, and highlight lines with others (your name, your clan…).
 - **COMPACT** (off by default, in FEATURES): tighter lines and spacing everywhere.
+- **HOVER CARDS**: pause over a player's name in ATTACKS or CHAT to see their place on this boss's board (it lists the top 10) and their damage in the last 5 minutes.
 - **STATS THEME**: if Zephy's [1MHP Data Statistics](https://gist.github.com/Zephy-fm/7eab1928aee90a961d28b206a4acccd1) userscript is installed, its panel takes on the toolkit's theme, highlight colour and the site's rarity colours. [TOOLKIT] → ADD-ONS shows whether it was found.
 
 ### Alerts
@@ -51,12 +53,12 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ### Top bar
 - **[TOOLKIT]**: the toolkit's settings menu.
-  - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
-  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order or notifications on or off. Changes apply after a reload.
+  - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), or **CUSTOM** with a colour picker for each of the theme's colours. **SHARE** copies your custom theme (and highlight colour) as a code such as `OMHP1-0b1020-121a30-dfe6f5-7f8aa6-2c3550-ffb000`, and **USE CODE** applies one.
+  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order, hover cards or notifications on or off. Changes apply after a reload.
   - **LOOT ALERT**: the lowest rarity that gets a notification.
   - **KEYS**: a reminder of the Alt shortcuts.
   - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
-  - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
+  - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, **TILE** arranges the open pop-out windows, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
   - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
 - **⚠ N OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which.
 - Local time and how long the page has been open.

@@ -152,6 +152,22 @@ html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] {
 }
 .omhp-filter-in:focus { border-color: var(--dim); outline: none; }
 .omhp-menu-hint { color: var(--dim); font-size: 10px; letter-spacing: .04em; }
+/* HOVER CARDS: a player's place on this boss and their last 5 minutes */
+.omhp-card {
+    position: fixed; z-index: 120; min-width: 200px; padding: 5px 8px; pointer-events: none;
+    background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+    font-size: 11px; line-height: 1.5; color: var(--fg); letter-spacing: .03em;
+}
+.omhp-card[hidden] { display: none; }
+.omhp-card-name { color: var(--amber); letter-spacing: .1em; margin-bottom: 2px; }
+.omhp-card div:not(.omhp-card-name) { display: flex; justify-content: space-between; gap: 12px; }
+.omhp-card .k { color: var(--dim); letter-spacing: .08em; }
+#feed .who, #chat-list .who { cursor: help; }
+#chat-list .who-gear { cursor: pointer; }
+/* [TOOLKIT] > CUSTOM: a colour picker per theme colour */
+.omhp-menu-row[hidden] { display: none; }
+.omhp-custom-pick { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--dim); letter-spacing: .06em; }
+.omhp-custom-pick input { width: 22px; height: 16px; padding: 0; border: 1px solid var(--faint); background: none; cursor: pointer; }
 
 /* COMPACT: tighter lines and spacing everywhere */
 html.omhp-compact body { font-size: 13px; }
@@ -242,17 +258,33 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 .omhp-chests-row .dim { text-align: right; }
 #omhp-loot-list { max-height: none; height: 140px; overflow-y: auto; }
 
-/* Pinned right panel: on top, scrolls on its own; the tab bar switches the one below */
+/* Pinned right panels (up to three): stacked on top, each scrolling on its own; the tab bar
+   switches the one below. Drag the line under one to resize it (it keeps that height). */
 #omhp-pinned {
-    flex: 0 1 auto; max-height: 45%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
-    margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
+    /* Never squeezed into the panel below: it keeps its height (up to 65% of the column) and
+       scrolls itself past that. --omhp-pins (set by pinPanel) shares the room out. */
+    flex: none; max-height: 65%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    display: flex; flex-direction: column;
 }
-#omhp-pinned > .panel { min-height: 0; }
-/* Drag the line under the pinned panel to share the column's height; it has a set
-   height once dragged */
-#omhp-pinned.sized { flex: none; max-height: none; }
-#omhp-pin-resize { flex: none; margin: -4px 0 4px; }
-#omhp-pin-resize[hidden] { display: none; }
+#omhp-pinned[hidden] { display: none; }
+.omhp-pin-slot {
+    position: relative; flex: none; min-height: 60px; max-height: calc(60vh / var(--omhp-pins, 1)); overflow-y: auto;
+    overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 6px; border-bottom: 1px dashed var(--faint);
+}
+.omhp-pin-slot.sized { flex: none; max-height: none; }
+.omhp-pin-slot > .panel { min-height: 0; }
+.omhp-pin-x {
+    position: sticky; top: 0; float: right; z-index: 2; font-size: 10px; color: var(--faint);
+    background: var(--bg); padding: 0 2px;
+}
+.omhp-pin-x:hover { color: var(--fg); }
+.omhp-pin-grip { flex: none; margin: -4px 0 4px; }
+#tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
+
+/* CLAN: the MEMBERS list folds away (see clanFold) */
+#panel-clan.omhp-clan-folded .clan-members { display: none; }
+.omhp-clan-fold { font: inherit; color: var(--dim); padding: 0; }
+.omhp-clan-fold:hover { color: var(--fg); }
 
 /* BAG: smaller loot-box cards so more fit across the right column */
 .col-side .box-row, .omhp-float .box-row { gap: 6px; }
