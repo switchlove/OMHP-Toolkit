@@ -78,3 +78,7 @@ This is an unofficial fan-made script and isn't affiliated with One Million HP. 
 ## License
 
 [MIT](LICENSE)
+
+---
+
+<sub>AI disclosure: [Claude](https://claude.ai) was used to help with code review and testing.</sub>
