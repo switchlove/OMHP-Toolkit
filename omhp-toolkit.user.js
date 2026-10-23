@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.24
+// @version      0.25
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -27,7 +27,7 @@
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
 //     dropdowns). [PIN] keeps the open panel above the others (drag the line under it
 //     to resize). [POP OUT] opens it in a floating window. BAG's loot-box cards are
-//     smaller so more fit across. RANKS (30s) and HISTORY (60s) refresh
+//     smaller so more fit across, and in the same order as SHOP. RANKS (30s) and HISTORY (60s) refresh
 //     while they're on screen.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can
 //     have several open at once.
@@ -510,7 +510,8 @@
         ["graph", "HP GRAPH", true], ["eta", "ETA", true], ["share", "SHARE", true], ["session", "SESSION", true],
         ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
         ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
-        ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["notify", "NOTIFY", false]
+        ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
+        ["notify", "NOTIFY", false]
     ];
     var features = loadSaved(FEATURES_KEY);
 
@@ -974,6 +975,9 @@
                         const m = store.state.me;
                         if (!out || !m || typeof m.total_damage !== "number") return;
                         out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits });
+                        // The order SHOP lists its loot boxes in (see bagBoxOrder)
+                        const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
+                        if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;
                     };
                     store.on("me", publishMe);
                     publishMe();
@@ -3039,6 +3043,31 @@
         };
     }
 
+    // BAG: the LOOT BOXES cards in the same order SHOP sells them in, so a pinned BAG
+    // lines up with SHOP. The site redraws the panel often, so the order is set with
+    // CSS (flex order) and set again after every redraw; boxes SHOP doesn't sell go last.
+    function bagBoxOrder() {
+        var panel = document.getElementById("panel-bag");
+        var bridge = document.getElementById("omhp-boss-data");
+        if (!panel || !bridge) return false;
+
+        function apply() {
+            var order = [];
+            try { order = JSON.parse(bridge.dataset.boxOrder || "[]"); } catch (e) { /* keep the site's order */ }
+            if (!order.length) return;
+            panel.querySelectorAll(".box-row > .box-card").forEach(function(card) {
+                var art = card.querySelector("[data-box-odds]");
+                var i = art ? order.indexOf(art.dataset.boxOdds) : -1;
+                var want = String(i === -1 ? 999 : i);
+                if (card.style.order !== want) card.style.order = want;
+            });
+        }
+
+        new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+        new MutationObserver(apply).observe(bridge, { attributes: true, attributeFilter: ["data-box-order"] });
+        apply();
+    }
+
     // Features that couldn't start (the site changed) and page-script imports that failed,
     // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
     var broken = [];
@@ -3093,6 +3122,7 @@
         run("notify", notifier);
         run("keys", shortcuts);
         run("filters", lineFilters);
+        run("boxorder", bagBoxOrder);
         pinPanel();
         floatingPanels();
         run("loot", lootLog);

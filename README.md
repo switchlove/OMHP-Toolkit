@@ -22,7 +22,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - The boss column and the right column stay pinned in view while you scroll.
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
 - **[PIN]** keeps the open panel above the others. Drag the line under it to split the column's height between the two panels. **[POP OUT]** opens it in a floating window.
-- BAG's loot-box cards are smaller, so more fit across the right column.
+- BAG's loot-box cards are smaller, so more fit across the right column, and they're in the same order as SHOP (**BOX ORDER** in FEATURES).
 - RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
 - Floating windows can be dragged, resized, minimised and faded, and several can be open at once.
 - Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
@@ -52,7 +52,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 ### Top bar
 - **[TOOLKIT]**: the toolkit's settings menu.
   - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER).
-  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme or notifications on or off. Changes apply after a reload.
+  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order or notifications on or off. Changes apply after a reload.
   - **LOOT ALERT**: the lowest rarity that gets a notification.
   - **KEYS**: a reminder of the Alt shortcuts.
   - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
