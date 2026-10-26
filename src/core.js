@@ -16,12 +16,63 @@ function loadSaved(key) {
     return loadJSON(key, {});
 }
 
+// Set when a save failed even after making room (healthCheck shows it)
+var storageFull = false;
+
 function save(key, value) {
+    var text = JSON.stringify(value);
     try {
-        localStorage.setItem(key, JSON.stringify(value));
+        localStorage.setItem(key, text);
     } catch (e) {
-        /* ignore */
+        // Storage is full: make room (old boss graphs and loot lines) and try once more
+        if (cleanUp(5)) {
+            try {
+                localStorage.setItem(key, text);
+                return;
+            } catch (e2) { /* still full */ }
+        }
+        storageFull = true;
     }
+}
+
+// This toolkit's saved data, biggest first: [{ key, size }], size in characters
+function ourStorage() {
+    var out = [];
+    try {
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (isOurKey(k)) out.push({ key: k, size: k.length + (localStorage.getItem(k) || "").length });
+        }
+    } catch (e) { /* storage blocked */ }
+    return out.sort(function(a, b) { return b.size - a.size; });
+}
+
+// Make room: keep only the newest `keep` boss graphs and the newest 50 loot lines. Writes
+// straight to storage, not through save(), so a full store can't loop back here. True if it
+// freed anything.
+function cleanUp(keep) {
+    var freed = false;
+    function rewrite(key, change) {
+        try {
+            var before = localStorage.getItem(key);
+            if (!before) return;
+            var after = JSON.stringify(change(JSON.parse(before)));
+            if (after.length < before.length) {
+                localStorage.setItem(key, after);
+                freed = true;
+            }
+        } catch (e) { /* leave it as it is */ }
+    }
+    rewrite("omhp.bossgraphs", function(all) {
+        var out = {};
+        Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, keep).forEach(function(k) { out[k] = all[k]; });
+        return out;
+    });
+    rewrite("omhp.loot", function(st) {
+        if (Array.isArray(st.items)) st.items = st.items.slice(0, 50);
+        return st;
+    });
+    return freed;
 }
 
 // One clock for the whole script: every(ms, fn) runs fn about every ms. With
@@ -55,6 +106,20 @@ function onTabsChange(fn) {
         }).observe(tabs, { childList: true, characterData: true, subtree: true });
     }
     tabWatchers.push(fn);
+}
+
+// A MutationObserver that runs fn once per frame at most, however many changes arrive (one
+// redraw of a site panel can be hundreds)
+function observeBatched(el, opts, fn) {
+    var queued = false;
+    new MutationObserver(function() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(function() {
+            queued = false;
+            fn();
+        });
+    }).observe(el, opts);
 }
 
 // Features you can switch on/off in [TOOLKIT]: [key, label, on by default?]
@@ -102,6 +167,25 @@ function applyTheme(name) {
 // Before anything else paints, so there's no flash of the old colours
 applyTheme(loadJSON(THEME_KEY, null));
 applyAccent(loadJSON(ACCENT_KEY, null));
+
+// A setting changed in another tab applies here at once: the colours straight away, and
+// whatever registered with onSetting(fn) gets fn(key) to catch up (the menu, filters, graphs)
+var settingWatchers = [];
+
+function onSetting(fn) {
+    settingWatchers.push(fn);
+}
+
+window.addEventListener("storage", function(e) {
+    if (e.key === THEME_KEY || e.key === CUSTOM_THEME_KEY) applyTheme(loadJSON(THEME_KEY, null));
+    if (e.key === ACCENT_KEY) applyAccent(loadJSON(ACCENT_KEY, null));
+    if (e.key === FEATURES_KEY) {
+        var now = loadSaved(FEATURES_KEY);
+        Object.keys(features).forEach(function(k) { delete features[k]; });
+        Object.assign(features, now);
+    }
+    settingWatchers.forEach(function(fn) { fn(e.key); });
+});
 
 // The boss's real HP/phase/number from the site's own data (see paintAccount), or null
 // if that isn't available yet. Falls back to the screen only when it isn't fogged.

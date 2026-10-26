@@ -371,7 +371,21 @@ function makeGraph(pane, source, rowsFor) {
         draw();
     }).observe(pane);
 
+    // A zoom range or legend entry changed in another tab
+    onSetting(function(key) {
+        if (key !== GRAPH_SHOW_KEY) return;
+        Object.assign(show, loadSaved(GRAPH_SHOW_KEY));
+        paintZoom();
+        draw();
+    });
+
     return { draw: draw };
+}
+
+// The points of a saved history: packed since v0.29 (see packPoints), a plain list before
+function historyPoints(saved) {
+    if (saved && saved.p) return unpackPoints(saved.p);
+    return saved && Array.isArray(saved.s) ? saved.s : [];
 }
 
 // The highest HP in a history, for one with no max saved
@@ -386,7 +400,7 @@ var GRAPHS_KEY = "omhp.bossgraphs";
 function archiveGraph(seq, points, fog, max) {
     if (points.length < 2) return;
     var all = loadSaved(GRAPHS_KEY);
-    all[seq] = { s: shrinkPoints(points, 300), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
+    all[seq] = { p: packPoints(shrinkPoints(points, 300)), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
     var out = {};
     Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, 20).forEach(function(k) { out[k] = all[k]; });
     save(GRAPHS_KEY, out);
@@ -404,7 +418,8 @@ function openBossGraph(seq, name) {
         return;
     }
     var saved = loadSaved(GRAPHS_KEY)[seq];
-    if (!saved || !saved.s || saved.s.length < 2) return;
+    var savedPoints = historyPoints(saved);
+    if (savedPoints.length < 2) return;
     var win = document.createElement("div");
     win.className = "omhp-float omhp-graph-win";
     var bar = document.createElement("div");
@@ -452,7 +467,7 @@ function openBossGraph(seq, name) {
     bar.addEventListener("pointerup", function() { drag = null; });
     bar.addEventListener("pointercancel", function() { drag = null; });
 
-    var points = saved.s, end = saved.end || points[points.length - 1][0];
+    var points = savedPoints, end = saved.end || points[points.length - 1][0];
     makeGraph(pane, function() {
         return {
             points: points, fog: saved.f || [], max: saved.max || maxHpOf(points), end: end, endLabel: hhmm(end),
@@ -488,16 +503,16 @@ function bossGraph() {
 
     var store = loadSaved(KEY);
     // Histories saved before v0.15 may hold fake HP from the FOG event: start them over
-    if (store.v !== 2) store = {};
+    if (store.v !== 2 && store.v !== 3) store = {};
     var boss = store.boss || null;
-    var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online, your lifetime damage]
+    var points = historyPoints(store); // [time, hp, phase, online, your lifetime damage]
     var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
     var maxHp = null;
 
     var leading = false; // this tab records the history (see isLeader)
 
     function persist() {
-        if (leading) save(KEY, { v: 2, boss: boss, s: points, f: fog });
+        if (leading) save(KEY, { v: 3, boss: boss, p: packPoints(points), f: fog }); // v3: packed (see lib.js)
     }
 
     // FOG is on: stretch the current fog span to now, or start a new one
@@ -566,9 +581,9 @@ function bossGraph() {
     window.addEventListener("storage", function(e) {
         if (e.key !== KEY || leading) return;
         var saved = loadSaved(KEY);
-        if (saved.v !== 2) return;
+        if (saved.v !== 2 && saved.v !== 3) return;
         boss = saved.boss || null;
-        points = Array.isArray(saved.s) ? saved.s : [];
+        points = historyPoints(saved);
         fog = Array.isArray(saved.f) ? saved.f : [];
         if (!document.hidden) graph.draw();
     });

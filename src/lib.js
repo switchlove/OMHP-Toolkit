@@ -209,3 +209,31 @@ function bucketColumns(points, fog, t0, span, cols, cutoff) {
     }
     return { vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols };
 }
+
+// A boss's HP history packed small for storage: times as whole seconds since the point
+// before, your lifetime damage as the change since the point before (the first reading in
+// full), and empty fields at the end of a point left off. { t: first time in seconds, s: rows }
+function packPoints(points) {
+    var t0 = points.length ? Math.round(points[0][0] / 1000) : 0, prevT = t0, prevMine = null;
+    var rows = points.map(function(p) {
+        var t = Math.round(p[0] / 1000);
+        var mine = p[4] == null ? null : prevMine === null ? p[4] : p[4] - prevMine;
+        prevMine = p[4] == null ? null : p[4];
+        var row = [t - prevT, p[1], p[2] || null, p[3] == null ? null : p[3], mine];
+        prevT = t;
+        while (row.length > 2 && row[row.length - 1] === null) row.pop();
+        return row;
+    });
+    return { t: t0, s: rows };
+}
+
+// ...and back to [time, hp, phase, online, your lifetime damage]
+function unpackPoints(packed) {
+    var t = packed.t * 1000, prevMine = null;
+    return (packed.s || []).map(function(r) {
+        t += r[0] * 1000;
+        var mine = r[4] == null ? null : prevMine === null ? r[4] : prevMine + r[4];
+        prevMine = mine;
+        return [t, r[1], r[2] == null ? null : r[2], r[3] == null ? null : r[3], mine];
+    });
+}

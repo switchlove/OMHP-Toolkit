@@ -18,7 +18,7 @@ function bagBoxOrder() {
         });
     }
 
-    new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+    observeBatched(panel, { childList: true, subtree: true }, apply);
     new MutationObserver(apply).observe(bridge, { attributes: true, attributeFilter: ["data-box-order"] });
     apply();
 }
@@ -57,6 +57,6 @@ function clanFold() {
         b.setAttribute("aria-expanded", String(!folded));
     }
 
-    new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+    observeBatched(panel, { childList: true, subtree: true }, apply);
     apply();
 }

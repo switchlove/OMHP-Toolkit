@@ -269,7 +269,7 @@ function floatingPanels() {
     }
 
     btn.addEventListener("click", function() { popOut(selectedKey()); });
-    new MutationObserver(syncButton).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
+    observeBatched(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] }, syncButton);
     syncButton();
     popOutPanel = popOut;
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.28
+// @version      0.29
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -64,8 +64,10 @@
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
 //     own CUSTOM colours, shareable as a code), FEATURES
 //     to switch parts of this script on or off (applies on reload), the loot alert
-//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, and EXPORT / IMPORT
-//     of everything as a backup file.
+//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, EXPORT / IMPORT
+//     of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it)
+//     and COPY DEBUG (details for a bug report). Settings changed in one tab apply in
+//     your other open tabs at once.
 //   - Local time and how long the page has been open.
 //   - The account button shows your badges and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
@@ -340,6 +342,34 @@
             prevMine = lastMine;
         }
         return { vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols };
+    }
+
+    // A boss's HP history packed small for storage: times as whole seconds since the point
+    // before, your lifetime damage as the change since the point before (the first reading in
+    // full), and empty fields at the end of a point left off. { t: first time in seconds, s: rows }
+    function packPoints(points) {
+        var t0 = points.length ? Math.round(points[0][0] / 1000) : 0, prevT = t0, prevMine = null;
+        var rows = points.map(function(p) {
+            var t = Math.round(p[0] / 1000);
+            var mine = p[4] == null ? null : prevMine === null ? p[4] : p[4] - prevMine;
+            prevMine = p[4] == null ? null : p[4];
+            var row = [t - prevT, p[1], p[2] || null, p[3] == null ? null : p[3], mine];
+            prevT = t;
+            while (row.length > 2 && row[row.length - 1] === null) row.pop();
+            return row;
+        });
+        return { t: t0, s: rows };
+    }
+
+    // ...and back to [time, hp, phase, online, your lifetime damage]
+    function unpackPoints(packed) {
+        var t = packed.t * 1000, prevMine = null;
+        return (packed.s || []).map(function(r) {
+            t += r[0] * 1000;
+            var mine = r[4] == null ? null : prevMine === null ? r[4] : prevMine + r[4];
+            prevMine = mine;
+            return [t, r[1], r[2] == null ? null : r[2], r[3] == null ? null : r[3], mine];
+        });
     }
     var css = `
         #app { max-width: 90%; }
@@ -738,12 +768,63 @@
         return loadJSON(key, {});
     }
 
+    // Set when a save failed even after making room (healthCheck shows it)
+    var storageFull = false;
+
     function save(key, value) {
+        var text = JSON.stringify(value);
         try {
-            localStorage.setItem(key, JSON.stringify(value));
+            localStorage.setItem(key, text);
         } catch (e) {
-            /* ignore */
+            // Storage is full: make room (old boss graphs and loot lines) and try once more
+            if (cleanUp(5)) {
+                try {
+                    localStorage.setItem(key, text);
+                    return;
+                } catch (e2) { /* still full */ }
+            }
+            storageFull = true;
         }
+    }
+
+    // This toolkit's saved data, biggest first: [{ key, size }], size in characters
+    function ourStorage() {
+        var out = [];
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (isOurKey(k)) out.push({ key: k, size: k.length + (localStorage.getItem(k) || "").length });
+            }
+        } catch (e) { /* storage blocked */ }
+        return out.sort(function(a, b) { return b.size - a.size; });
+    }
+
+    // Make room: keep only the newest `keep` boss graphs and the newest 50 loot lines. Writes
+    // straight to storage, not through save(), so a full store can't loop back here. True if it
+    // freed anything.
+    function cleanUp(keep) {
+        var freed = false;
+        function rewrite(key, change) {
+            try {
+                var before = localStorage.getItem(key);
+                if (!before) return;
+                var after = JSON.stringify(change(JSON.parse(before)));
+                if (after.length < before.length) {
+                    localStorage.setItem(key, after);
+                    freed = true;
+                }
+            } catch (e) { /* leave it as it is */ }
+        }
+        rewrite("omhp.bossgraphs", function(all) {
+            var out = {};
+            Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, keep).forEach(function(k) { out[k] = all[k]; });
+            return out;
+        });
+        rewrite("omhp.loot", function(st) {
+            if (Array.isArray(st.items)) st.items = st.items.slice(0, 50);
+            return st;
+        });
+        return freed;
     }
 
     // One clock for the whole script: every(ms, fn) runs fn about every ms. With
@@ -777,6 +858,20 @@
             }).observe(tabs, { childList: true, characterData: true, subtree: true });
         }
         tabWatchers.push(fn);
+    }
+
+    // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
+    // redraw of a site panel can be hundreds)
+    function observeBatched(el, opts, fn) {
+        var queued = false;
+        new MutationObserver(function() {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(function() {
+                queued = false;
+                fn();
+            });
+        }).observe(el, opts);
     }
 
     // Features you can switch on/off in [TOOLKIT]: [key, label, on by default?]
@@ -824,6 +919,25 @@
     // Before anything else paints, so there's no flash of the old colours
     applyTheme(loadJSON(THEME_KEY, null));
     applyAccent(loadJSON(ACCENT_KEY, null));
+
+    // A setting changed in another tab applies here at once: the colours straight away, and
+    // whatever registered with onSetting(fn) gets fn(key) to catch up (the menu, filters, graphs)
+    var settingWatchers = [];
+
+    function onSetting(fn) {
+        settingWatchers.push(fn);
+    }
+
+    window.addEventListener("storage", function(e) {
+        if (e.key === THEME_KEY || e.key === CUSTOM_THEME_KEY) applyTheme(loadJSON(THEME_KEY, null));
+        if (e.key === ACCENT_KEY) applyAccent(loadJSON(ACCENT_KEY, null));
+        if (e.key === FEATURES_KEY) {
+            var now = loadSaved(FEATURES_KEY);
+            Object.keys(features).forEach(function(k) { delete features[k]; });
+            Object.assign(features, now);
+        }
+        settingWatchers.forEach(function(fn) { fn(e.key); });
+    });
 
     // The boss's real HP/phase/number from the site's own data (see paintAccount), or null
     // if that isn't available yet. Falls back to the screen only when it isn't fogged.
@@ -1967,7 +2081,21 @@
             draw();
         }).observe(pane);
 
+        // A zoom range or legend entry changed in another tab
+        onSetting(function(key) {
+            if (key !== GRAPH_SHOW_KEY) return;
+            Object.assign(show, loadSaved(GRAPH_SHOW_KEY));
+            paintZoom();
+            draw();
+        });
+
         return { draw: draw };
+    }
+
+    // The points of a saved history: packed since v0.29 (see packPoints), a plain list before
+    function historyPoints(saved) {
+        if (saved && saved.p) return unpackPoints(saved.p);
+        return saved && Array.isArray(saved.s) ? saved.s : [];
     }
 
     // The highest HP in a history, for one with no max saved
@@ -1982,7 +2110,7 @@
     function archiveGraph(seq, points, fog, max) {
         if (points.length < 2) return;
         var all = loadSaved(GRAPHS_KEY);
-        all[seq] = { s: shrinkPoints(points, 300), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
+        all[seq] = { p: packPoints(shrinkPoints(points, 300)), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
         var out = {};
         Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, 20).forEach(function(k) { out[k] = all[k]; });
         save(GRAPHS_KEY, out);
@@ -2000,7 +2128,8 @@
             return;
         }
         var saved = loadSaved(GRAPHS_KEY)[seq];
-        if (!saved || !saved.s || saved.s.length < 2) return;
+        var savedPoints = historyPoints(saved);
+        if (savedPoints.length < 2) return;
         var win = document.createElement("div");
         win.className = "omhp-float omhp-graph-win";
         var bar = document.createElement("div");
@@ -2048,7 +2177,7 @@
         bar.addEventListener("pointerup", function() { drag = null; });
         bar.addEventListener("pointercancel", function() { drag = null; });
 
-        var points = saved.s, end = saved.end || points[points.length - 1][0];
+        var points = savedPoints, end = saved.end || points[points.length - 1][0];
         makeGraph(pane, function() {
             return {
                 points: points, fog: saved.f || [], max: saved.max || maxHpOf(points), end: end, endLabel: hhmm(end),
@@ -2084,16 +2213,16 @@
 
         var store = loadSaved(KEY);
         // Histories saved before v0.15 may hold fake HP from the FOG event: start them over
-        if (store.v !== 2) store = {};
+        if (store.v !== 2 && store.v !== 3) store = {};
         var boss = store.boss || null;
-        var points = Array.isArray(store.s) ? store.s : []; // [time, hp, phase, online, your lifetime damage]
+        var points = historyPoints(store); // [time, hp, phase, online, your lifetime damage]
         var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
         var maxHp = null;
 
         var leading = false; // this tab records the history (see isLeader)
 
         function persist() {
-            if (leading) save(KEY, { v: 2, boss: boss, s: points, f: fog });
+            if (leading) save(KEY, { v: 3, boss: boss, p: packPoints(points), f: fog }); // v3: packed (see lib.js)
         }
 
         // FOG is on: stretch the current fog span to now, or start a new one
@@ -2162,9 +2291,9 @@
         window.addEventListener("storage", function(e) {
             if (e.key !== KEY || leading) return;
             var saved = loadSaved(KEY);
-            if (saved.v !== 2) return;
+            if (saved.v !== 2 && saved.v !== 3) return;
             boss = saved.boss || null;
-            points = Array.isArray(saved.s) ? saved.s : [];
+            points = historyPoints(saved);
             fog = Array.isArray(saved.f) ? saved.f : [];
             if (!document.hidden) graph.draw();
         });
@@ -2603,7 +2732,7 @@
         // Features on/off: takes effect on the next reload
         var note = el("div", "omhp-menu-note", "reload the page to apply");
         note.hidden = true;
-        var featBody = row("FEATURES", FEATURES.map(function(f) {
+        var featBtns = FEATURES.map(function(f) {
             var b = choice(f[1], isOn(f[0]), "turn " + f[1] + " on or off", function() {
                 features[f[0]] = !isOn(f[0]);
                 save(FEATURES_KEY, features);
@@ -2618,7 +2747,8 @@
             b.classList.add("omhp-check");
             b.setAttribute("aria-pressed", String(isOn(f[0])));
             return b;
-        }));
+        });
+        var featBody = row("FEATURES", featBtns);
         featBody.classList.add("omhp-menu-grid");
         pop.appendChild(note);
 
@@ -2747,10 +2877,54 @@
             file
         ]);
 
+        // What the toolkit keeps in this browser; CLEAN UP makes it smaller
+        var storageNote = el("span", "omhp-menu-hint");
+        row("STORAGE", [storageNote, choice("CLEAN UP", false, "keep only the last 5 boss graphs and 50 loot lines", function() {
+            cleanUp(5);
+            paintStorage();
+        })]);
+        function paintStorage() {
+            var used = ourStorage().reduce(function(n, x) { return n + x.size; }, 0);
+            storageNote.textContent = Math.round(used * 2 / 1024) + " KB" + (storageFull ? " · FULL" : "");
+        }
+
+        // COPY DEBUG: details to paste into a GitHub issue when something's wrong
+        var debugNote = el("span", "omhp-menu-hint");
+        row("HELP", [choice("COPY DEBUG", false, "copy details for a bug report (versions, settings, sizes; no stats or names)", function() {
+            var text = debugReport();
+            var shown = function() { prompt("Copy this into your bug report:", text.replace(/\n/g, " | ")); };
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(function() { debugNote.textContent = "copied"; }, shown);
+            } else shown();
+        }), debugNote]);
+
+        // Another tab changed a setting: show it here too (core.js applies the colours)
+        onSetting(function(key) {
+            if (key === ACCENT_KEY) {
+                current = loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex;
+                swatches.forEach(function(x, i) { x.classList.toggle("on", ACCENTS[i].hex === current); });
+            }
+            if (key === THEME_KEY || key === CUSTOM_THEME_KEY) {
+                currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
+                themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === currentTheme); });
+                paintCustom();
+            }
+            if (key === FEATURES_KEY) {
+                featBtns.forEach(function(b, i) {
+                    b.classList.toggle("on", isOn(FEATURES[i][0]));
+                    b.setAttribute("aria-pressed", String(isOn(FEATURES[i][0])));
+                });
+                note.hidden = false;
+            }
+        });
+
         btn.addEventListener("click", function(e) {
             e.stopPropagation();
             pop.hidden = !pop.hidden;
-            if (!pop.hidden) paintAddons();
+            if (!pop.hidden) {
+                paintAddons();
+                paintStorage();
+            }
         });
         document.addEventListener("click", function(e) {
             if (!wrap.contains(e.target)) pop.hidden = true;
@@ -3336,7 +3510,7 @@
             if (find(k)) unpin(k);
             else pin(k);
         });
-        new MutationObserver(paint).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
+        observeBatched(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] }, paint);
         paint();
 
         var saved = loadJSON(PIN_KEY, null);
@@ -3630,7 +3804,7 @@
         }
 
         btn.addEventListener("click", function() { popOut(selectedKey()); });
-        new MutationObserver(syncButton).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
+        observeBatched(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] }, syncButton);
         syncButton();
         popOutPanel = popOut;
 
@@ -3816,6 +3990,11 @@
             }).observe(l, { childList: true });
         });
         applyAll();
+        onSetting(function(key) {
+            if (key !== FILTER_KEY) return;
+            f = Object.assign({ hide: [], mark: [] }, loadSaved(FILTER_KEY));
+            applyAll();
+        });
 
         filterEditor = function() {
             var box = document.createElement("div");
@@ -3862,7 +4041,7 @@
             });
         }
 
-        new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+        observeBatched(panel, { childList: true, subtree: true }, apply);
         new MutationObserver(apply).observe(bridge, { attributes: true, attributeFilter: ["data-box-order"] });
         apply();
     }
@@ -3901,7 +4080,7 @@
             b.setAttribute("aria-expanded", String(!folded));
         }
 
-        new MutationObserver(apply).observe(panel, { childList: true, subtree: true });
+        observeBatched(panel, { childList: true, subtree: true }, apply);
         apply();
     }
     // Features that couldn't start (the site changed) and page-script imports that failed,
@@ -3918,6 +4097,7 @@
 
         function paint() {
             var parts = broken.slice();
+            if (storageFull) parts.push("STORAGE FULL");
             if (bridge && bridge.dataset.fail) parts = parts.concat(bridge.dataset.fail.split(", "));
             if (!parts.length) return;
             span.textContent = "⚠ " + parts.length + " OFF";
@@ -3929,9 +4109,32 @@
         }
 
         if (bridge) new MutationObserver(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
+        every(15000, function() { if (storageFull) paint(); });
         paint();
     }
 
+    // [TOOLKIT] > COPY DEBUG: the toolkit's version and state for a bug report (no stats or names)
+    function debugReport() {
+        var bridge = document.getElementById("omhp-boss-data");
+        var main = document.querySelector('script[src*="js/main.js"]');
+        var width = function(sel) {
+            var e = document.querySelector(sel);
+            return e ? e.offsetWidth : "-";
+        };
+        var fails = broken.concat(bridge && bridge.dataset.fail ? bridge.dataset.fail.split(", ") : []);
+        return [
+            "OMHP Toolkit " + (typeof GM_info !== "undefined" && GM_info.script ? "v" + GM_info.script.version : "(version unknown)") +
+                " · site " + (main ? new URL(main.src).search || "(no ?v)" : "(main.js not found)"),
+            "browser: " + navigator.userAgent,
+            "window: " + window.innerWidth + "x" + window.innerHeight + " · columns " + width("#col-left") + " / " +
+                width("#app .col-main") + " / " + width("#app .col-side"),
+            "features off: " + (FEATURES.filter(function(f) { return !isOn(f[0]); }).map(function(f) { return f[0]; }).join(", ") || "none"),
+            "not started: " + (fails.join(", ") || "none"),
+            "this tab records: " + (isLeader() ? "yes" : "no") + " · site data: " + (bridge && bridge.dataset.boss ? "yes" : "no"),
+            "storage: " + ourStorage().map(function(x) { return x.key.replace(/^omhp\./, "") + " " + Math.round(x.size * 2 / 1024) + "K"; }).join(", ") +
+                (storageFull ? " (FULL)" : "")
+        ].join("\n");
+    }
     function moveSections() {
         // Start a feature if it's on; note it if it can't find what it needs
         function run(name, fn) {

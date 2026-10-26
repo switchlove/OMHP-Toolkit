@@ -60,6 +60,9 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
   - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
   - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, **TILE** arranges the open pop-out windows, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
   - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
+  - **STORAGE**: how much the toolkit keeps in your browser. **CLEAN UP** keeps only the last 5 boss graphs and 50 loot lines. If the browser's storage ever fills up, the toolkit does this by itself and shows **STORAGE FULL** in the ⚠ warning if that still isn't enough.
+  - **HELP**: **COPY DEBUG** copies the toolkit's version, the site's version, your browser, which features are off and what couldn't start, to paste into a bug report. It has no stats or names in it.
+  - Colours, themes, filters and graph settings changed in one tab apply in your other open tabs straight away.
 - A warning such as **⚠ 2 OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which parts.
 - Local time and how long the page has been open.
 - The account button shows your badges and name.

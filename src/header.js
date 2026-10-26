@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.28
+// @version      0.29
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -64,8 +64,10 @@
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
 //     own CUSTOM colours, shareable as a code), FEATURES
 //     to switch parts of this script on or off (applies on reload), the loot alert
-//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, and EXPORT / IMPORT
-//     of everything as a backup file.
+//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, EXPORT / IMPORT
+//     of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it)
+//     and COPY DEBUG (details for a bug report). Settings changed in one tab apply in
+//     your other open tabs at once.
 //   - Local time and how long the page has been open.
 //   - The account button shows your badges and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).

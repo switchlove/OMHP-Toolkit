@@ -177,3 +177,19 @@ test("bucketColumns: nothing after the replay cutoff", () => {
     same(c.vals, [100, 100, null, null]);
     same(c.fogCols, [false, false, false, false]);
 });
+
+test("packPoints / unpackPoints: a round trip", () => {
+    const pts = [
+        [1700000000000, 1000, 1, 5, 500],
+        [1700000005000, 990, 1, 6, 510],
+        [1700000010000, 980, null, null, null],
+        [1700000015000, 970, 2, 7, 530]
+    ];
+    const packed = lib.packPoints(pts);
+    same(packed, { t: 1700000000, s: [[0, 1000, 1, 5, 500], [5, 990, 1, 6, 10], [5, 980], [5, 970, 2, 7, 530]] });
+    same(lib.unpackPoints(packed), pts);
+});
+
+test("packPoints / unpackPoints: nothing yet", () => {
+    same(lib.unpackPoints(lib.packPoints([])), []);
+});

@@ -29,6 +29,11 @@ function lineFilters() {
         }).observe(l, { childList: true });
     });
     applyAll();
+    onSetting(function(key) {
+        if (key !== FILTER_KEY) return;
+        f = Object.assign({ hide: [], mark: [] }, loadSaved(FILTER_KEY));
+        applyAll();
+    });
 
     filterEditor = function() {
         var box = document.createElement("div");

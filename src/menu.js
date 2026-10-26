@@ -154,7 +154,7 @@ function toolkitMenu() {
     // Features on/off: takes effect on the next reload
     var note = el("div", "omhp-menu-note", "reload the page to apply");
     note.hidden = true;
-    var featBody = row("FEATURES", FEATURES.map(function(f) {
+    var featBtns = FEATURES.map(function(f) {
         var b = choice(f[1], isOn(f[0]), "turn " + f[1] + " on or off", function() {
             features[f[0]] = !isOn(f[0]);
             save(FEATURES_KEY, features);
@@ -169,7 +169,8 @@ function toolkitMenu() {
         b.classList.add("omhp-check");
         b.setAttribute("aria-pressed", String(isOn(f[0])));
         return b;
-    }));
+    });
+    var featBody = row("FEATURES", featBtns);
     featBody.classList.add("omhp-menu-grid");
     pop.appendChild(note);
 
@@ -298,10 +299,54 @@ function toolkitMenu() {
         file
     ]);
 
+    // What the toolkit keeps in this browser; CLEAN UP makes it smaller
+    var storageNote = el("span", "omhp-menu-hint");
+    row("STORAGE", [storageNote, choice("CLEAN UP", false, "keep only the last 5 boss graphs and 50 loot lines", function() {
+        cleanUp(5);
+        paintStorage();
+    })]);
+    function paintStorage() {
+        var used = ourStorage().reduce(function(n, x) { return n + x.size; }, 0);
+        storageNote.textContent = Math.round(used * 2 / 1024) + " KB" + (storageFull ? " · FULL" : "");
+    }
+
+    // COPY DEBUG: details to paste into a GitHub issue when something's wrong
+    var debugNote = el("span", "omhp-menu-hint");
+    row("HELP", [choice("COPY DEBUG", false, "copy details for a bug report (versions, settings, sizes; no stats or names)", function() {
+        var text = debugReport();
+        var shown = function() { prompt("Copy this into your bug report:", text.replace(/\n/g, " | ")); };
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(function() { debugNote.textContent = "copied"; }, shown);
+        } else shown();
+    }), debugNote]);
+
+    // Another tab changed a setting: show it here too (core.js applies the colours)
+    onSetting(function(key) {
+        if (key === ACCENT_KEY) {
+            current = loadJSON(ACCENT_KEY, null) || ACCENTS[0].hex;
+            swatches.forEach(function(x, i) { x.classList.toggle("on", ACCENTS[i].hex === current); });
+        }
+        if (key === THEME_KEY || key === CUSTOM_THEME_KEY) {
+            currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
+            themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === currentTheme); });
+            paintCustom();
+        }
+        if (key === FEATURES_KEY) {
+            featBtns.forEach(function(b, i) {
+                b.classList.toggle("on", isOn(FEATURES[i][0]));
+                b.setAttribute("aria-pressed", String(isOn(FEATURES[i][0])));
+            });
+            note.hidden = false;
+        }
+    });
+
     btn.addEventListener("click", function(e) {
         e.stopPropagation();
         pop.hidden = !pop.hidden;
-        if (!pop.hidden) paintAddons();
+        if (!pop.hidden) {
+            paintAddons();
+            paintStorage();
+        }
     });
     document.addEventListener("click", function(e) {
         if (!wrap.contains(e.target)) pop.hidden = true;

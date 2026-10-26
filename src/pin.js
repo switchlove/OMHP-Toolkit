@@ -145,7 +145,7 @@ function pinPanel() {
         if (find(k)) unpin(k);
         else pin(k);
     });
-    new MutationObserver(paint).observe(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] });
+    observeBatched(tabs, { subtree: true, attributes: true, attributeFilter: ["aria-selected", "hidden"] }, paint);
     paint();
 
     var saved = loadJSON(PIN_KEY, null);
