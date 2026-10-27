@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.31
+// @version      0.32
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -4550,23 +4550,23 @@
         var input = document.getElementById("chat-input");
         if (!list || !input) return false;
 
-        // The site redraws the whole list on each message, so lines are told apart by their id; the
-        // ones on screen when the page opened are old news
-        var seen = null;
+        // The site redraws the whole list on each message. Message ids only go up, so only the lines
+        // after the newest one already looked at are new; those on screen when the page opened are
+        // old news. Walking back from the end stops at the first old line.
+        var newest = null;
         function scan() {
-            var lines = list.querySelectorAll("li[data-id]");
-            if (seen === null) {
-                seen = {};
-                lines.forEach(function(li) { seen[li.dataset.id] = true; });
-                return;
-            }
-            lines.forEach(function(li) {
-                if (seen[li.dataset.id]) return;
-                seen[li.dataset.id] = true;
-                if (!li.classList.contains("mention-me") || li.classList.contains("me") || !isLeader()) return;
+            var lines = list.children, top = newest;
+            for (var i = lines.length - 1; i >= 0; i--) {
+                var id = Number(lines[i].dataset && lines[i].dataset.id);
+                if (!id) continue;
+                if (newest !== null && id <= newest) break;
+                if (top === null || id > top) top = id;
+                var li = lines[i];
+                if (newest === null || !li.classList.contains("mention-me") || li.classList.contains("me") || !isLeader()) continue;
                 notify("Chat: " + ((li.querySelector(".chat-text") || li).textContent || "").trim().slice(0, 120));
                 playSound("mention");
-            });
+            }
+            newest = top === null ? 0 : top;
         }
         setTimeout(function() {
             scan();
@@ -4587,12 +4587,15 @@
             input.setSelectionRange(input.value.length, input.value.length);
         }, true);
 
-        // A line's time ("3m") as the date and time it was sent
-        document.addEventListener("mouseover", function(e) {
-            var t = e.target.closest ? e.target.closest("#chat-list .t[data-t], #feed .t[data-t]") : null;
-            if (!t || t.title) return;
+        // A line's time ("3m") as the date and time it was sent (watched on the two lists only)
+        function timeTitle(e) {
+            var t = e.target;
+            if (!(t instanceof HTMLElement) || !t.classList.contains("t") || !t.dataset.t || t.title) return;
             var secs = Number(t.dataset.t);
             if (secs) t.title = new Date(secs * 1000).toLocaleString();
+        }
+        [list, document.getElementById("feed")].forEach(function(l) {
+            if (l) l.addEventListener("mouseover", timeTitle);
         });
     }
 
