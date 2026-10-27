@@ -3,10 +3,11 @@
 function tabTitle() {
     function paint() {
         var part = "";
-        if (fogged()) part = "[FOG]";
+        if (fogged()) part = "[" + (eventTag(false) || "FOG") + "]";
         else {
             var b = trueBoss();
-            if (b && b.max && b.alive !== false) part = "[" + (b.hp / b.max * 100).toFixed(0) + "%" + (etaShort ? " " + etaShort : "") + "]";
+            if (b && b.max && b.alive !== false) part = "[" + (b.hp / b.max * 100).toFixed(0) + "%" + (etaShort ? " " + etaShort : "") +
+                (eventTag(false) ? " · " + eventTag(false) : "") + "]";
         }
         var next = titleWith(document.title, part); // see lib.js
         if (next !== document.title) document.title = next;

@@ -212,6 +212,7 @@ function lootLog() {
             var label = (tag.textContent.match(/[A-Z][A-Z ]*[A-Z]/) || [rarity.slice(2).toUpperCase()])[0];
             st.counts[rarity] = st.counts[rarity] || [0, label];
             st.counts[rarity][0]++;
+            if (RARITIES.indexOf(rarity.slice(2)) !== -1) bumpRecord("drop", RARITIES.indexOf(rarity.slice(2)), { text: it.text.trim() });
         } else {
             // Boxes and scrolls: keep the line's own wording after your name
             it.text = (li.querySelector(".m") || li).textContent.replace(/^.*?\b(found|opened)\b/, "$1");

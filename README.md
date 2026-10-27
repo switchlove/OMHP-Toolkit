@@ -21,7 +21,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - Drag the gaps between columns to resize them. Double-click any drag handle to reset it.
 - The boss column and the right column stay pinned in view while you scroll.
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
-- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]** and a line under it you can drag to resize it. **[POP OUT]** opens the open panel in a floating window.
+- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]** and a line under it you can drag to resize it. **[POP OUT]** opens the open panel in a floating window. Both sit at the right of the tab bar's first line.
 - BAG's loot-box cards are smaller, so more fit across the right column, and they're in the same order as SHOP (**BOX ORDER** in FEATURES).
 - CLAN's MEMBERS list folds away with **[-]** / **[+]** on its heading, and stays folded until you open it again.
 - RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
@@ -30,13 +30,16 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ### Boss
 - An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes, players online (`*`) and your own damage (`+`), with a scale on the right for those two, and hovering shows the values for that moment. Phase changes are drawn on top of everything but the HP line, and FOG periods are shaded with `~`. Click an entry in the legend under it to hide or show that part (fill, heals, phases, online, your damage, fog). **[ALL] [1H] [15M]** zoom in on the recent part of a long fight, and **[REPLAY]** plays the boss's history back from the start over 10 seconds.
+- World events (MERCHANT, STASH, HUNT...) run along the graph's bottom row as `=` marks starting with the event's first letter; hover one for its name. While an event is running, its name and time left lead the ETA line and the tab title.
+- On the right of the live graph, a faint `:` line runs from the HP now down to 0 at the estimated kill (up to half the width; a kill further off ends the line with `>` at the edge, and the axis says how long). **[VS LAST]** draws the previous boss's fight faintly over this one, lined up from its start, to see if this one is going faster.
 - HP/min, everyone's DMG/min, HP healed and an estimated kill time from the last 5 minutes, with a range from what the last 1 and 15 minutes say, e.g. `DOWN IN ~39m (31–52m)`.
-- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed. **[GRAPH]** opens a boss's HP graph in a window you can move, resize, zoom and replay (kept for the last 20 bosses).
+- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed, which world events it had, and (on hover) your damage per phase. **[GRAPH]** opens a boss's HP graph in a window you can move, resize, zoom and replay (kept for the last 20 bosses).
 - During the FOG event it uses the site's real data and never records the fake HP.
 
 ### Fight
 - **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**, in its own box under FIGHT: your damage today, damage per hour (counting only the time the game was open), attacks, best and average hit, crit rate, shards earned and spent, shards per hour, and time played. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time, shards and loot. Hover AVG HIT for the spread of your last 200 hits (smallest, median, 9 in 10, biggest).
+- **SESSION**, in its own box under FIGHT: your damage today, damage per hour (counting only the time the game was open), attacks, best and average hit, crit rate, shards earned and spent, shards per hour, and time played. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time, shards and loot. Hover AVG HIT for the spread of your last 200 hits (smallest, median, 9 in 10, biggest). **THIS BOSS** shows your damage on the current boss, split by phase on hover.
+- **[RECORDS]** in SESSION: your biggest hit, best day, best share of a boss, rarest drop and how many days in a row you've played. Breaking one flashes it in SESSION with NEW RECORD.
 - **FULL IN**: time until every attack slot has refilled. **IDLE** adds up how long today your attacks sat full, recharging nothing.
 - **LOOT**: what you found today, counted by rarity, with drops per 100 attacks (hover for the last 30 days). Like SESSION, it carries over when you reload and has its own **[RESET]**. **[CHESTS]** shows what your box openings gave, per box, next to the site's stated odds (from single opens; OPEN ALL only reports how many were opened).
 
@@ -48,7 +51,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - **STATS THEME**: if Zephy's [1MHP Data Statistics](https://gist.github.com/Zephy-fm/7eab1928aee90a961d28b206a4acccd1) userscript is installed, its panel takes on the toolkit's theme, highlight colour and the site's rarity colours. [TOOLKIT] → ADD-ONS shows whether it was found.
 
 ### Alerts
-- The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG]` during FOG.
+- The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG 1:42]` during FOG. A running world event adds its name and time left: `[72% ~39m · MERCHANT 1:42]`.
 - **NOTIFY** (off until you turn it on in FEATURES): desktop notifications while the tab is in the background, for full attacks, a boss going down or a new one arriving, FOG starting or ending, new messages, and loot from a rarity you pick (**LOOT ALERT** in [TOOLKIT], LEGENDARY or better by default).
 
 ### Top bar
@@ -64,7 +67,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
   - **HELP**: **COPY DEBUG** copies the toolkit's version, the site's version, your browser, which features are off and what couldn't start, to paste into a bug report. It has no stats or names in it.
   - Colours, themes, filters and graph settings changed in one tab apply in your other open tabs straight away.
 - A warning such as **⚠ 2 OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which parts.
-- Local time and how long the page has been open.
+- Local time, how long the page has been open, and how long until the next **DAILY** reward, or **DAILY READY** while today's is waiting (with NOTIFY on, you get one reminder a day after it's waited 30 minutes).
 - The account button shows your badges and name.
 
 Your layout, sizes, order, colours, feature choices, HP history, session and loot are saved in your browser's localStorage. With the game open in more than one tab, one tab records the HP history and loot and the others show what it saves, so nothing is counted twice.

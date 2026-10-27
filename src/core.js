@@ -108,6 +108,20 @@ function onTabsChange(fn) {
     tabWatchers.push(fn);
 }
 
+// The box for [PIN] and [POP OUT] in the tab bar. With FLAT TABS it sits at the right of the
+// first row; that row is padded by its width on both sides (--omhp-tools) so it stays centred.
+function tabTools(tabs) {
+    var box = document.getElementById("omhp-tab-tools");
+    if (box) return box;
+    box = document.createElement("span");
+    box.id = "omhp-tab-tools";
+    tabs.appendChild(box);
+    new ResizeObserver(function() {
+        tabs.style.setProperty("--omhp-tools", box.offsetWidth + "px");
+    }).observe(box);
+    return box;
+}
+
 // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
 // redraw of a site panel can be hundreds)
 function observeBatched(el, opts, fn) {
@@ -210,6 +224,36 @@ function trueBoss() {
     };
 }
 
+// The world event running now ({ kind, stage, name, id, until }) from the site's data, or null
+function runningEvent() {
+    var b = trueBoss();
+    var ev = b && b.alive !== false ? b.event : null;
+    return ev && ev.kind && (!ev.until || ev.until > Date.now()) ? ev : null;
+}
+
+// "MERCHANT 1:42" for the ETA line and the tab title, or "" when nothing's running
+function eventTag(withName) {
+    var ev = runningEvent();
+    if (!ev) return "";
+    var name = withName && ev.name ? String(ev.name).toUpperCase() : eventLabel(ev.kind);
+    return name + (ev.until ? " " + clockDur(ev.until - Date.now()) : "");
+}
+
+// Your all-time bests (SESSION > [RECORDS]): { kind: { v, d: day, ...more } }
+var RECORDS_KEY = "omhp.records";
+var REC_NAMES = { hit: "BIGGEST HIT", day: "BEST DAY", share: "BEST SHARE", drop: "RAREST DROP", streak: "STREAK" };
+var REC_CELLS = { hit: "BEST HIT", day: "DAMAGE" }; // the SESSION cell each one flashes
+
+// A new best? Save it and tell SESSION ("omhp-record"). True if it was one.
+function bumpRecord(kind, value, more) {
+    var all = loadSaved(RECORDS_KEY);
+    if (all[kind] && all[kind].v >= value) return false;
+    all[kind] = Object.assign({ v: value, d: today() }, more || {});
+    save(RECORDS_KEY, all);
+    document.dispatchEvent(new CustomEvent("omhp-record", { detail: kind }));
+    return true;
+}
+
 // The site's own flag while the FOG world event is faking the HP readout
 function fogged() {
     var bar = document.getElementById("hp-bar");
@@ -263,7 +307,7 @@ function myTotals() {
 // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
 function isOurKey(k) {
     return k.indexOf("omhp.layout.") === 0 ||
-        ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
+        ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", "omhp.records", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
 }
 
 // Your attacks today, from the stored SESSION (see sessionStats), or 0

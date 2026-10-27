@@ -20,7 +20,8 @@ function makeGraph(pane, source, rowsFor) {
     pane.appendChild(plot);
 
     // What the graph shows (legend toggles and the zoom range), shared and remembered
-    var show = Object.assign({ fill: true, heal: true, phase: true, online: true, mine: true, fog: true, range: 0 },
+    var show = Object.assign({ fill: true, heal: true, phase: true, online: true, mine: true, fog: true, events: true,
+        proj: true, vs: false, range: 0 },
         loadSaved(GRAPH_SHOW_KEY));
 
     // [ALL] [1H] [15M]: how far back the graph reaches
@@ -51,6 +52,20 @@ function makeGraph(pane, source, rowsFor) {
     replayBtn.textContent = "[REPLAY]";
     replayBtn.title = "play this boss's HP history back from the start";
     head.appendChild(replayBtn);
+
+    // [VS LAST]: the previous boss's fight drawn faintly over this one (the live graph only)
+    var vsBtn = document.createElement("button");
+    vsBtn.type = "button";
+    vsBtn.className = "btn-text omhp-replay";
+    vsBtn.textContent = "[VS LAST]";
+    vsBtn.title = "compare with the previous boss's fight, from its start";
+    vsBtn.hidden = true;
+    vsBtn.addEventListener("click", function() {
+        show.vs = !show.vs;
+        save(GRAPH_SHOW_KEY, show);
+        draw();
+    });
+    head.appendChild(vsBtn);
 
     var replayAt = null, replayTimer = null; // the moment the replay has reached
 
@@ -117,6 +132,7 @@ function makeGraph(pane, source, rowsFor) {
         if (view.fogCols[c]) lines.push("FOG: HP hidden");
         if (show.online && view.online[c] !== null) lines.push(view.online[c] + " online");
         if (show.mine && view.mine[c]) lines.push("you: " + fmt(view.mine[c]) + " dmg");
+        if (view.events[c]) lines.push("EVENT: " + eventLabel(view.events[c]));
         tip.textContent = lines.join("\n");
         tip.hidden = false;
         // Keep the box inside the pane: flip to the cursor's left near the right edge
@@ -183,16 +199,22 @@ function makeGraph(pane, source, rowsFor) {
         }
 
         // The whole fight, or (zoomed, and not replaying) only its last `range` ms
-        var t1 = d.end, first = points[0][0];
-        var zoomed = !!show.range && replayAt === null && t1 - first > show.range;
-        var t0 = zoomed ? t1 - show.range : first;
+        var now = d.end, first = points[0][0];
+        var zoomed = !!show.range && replayAt === null && now - first > show.range;
+        var t0 = zoomed ? now - show.range : first;
+        // Room on the right for the kill estimate (the live graph, not replaying): up to half
+        // the width; a kill further off than that ends the line with > at the edge
+        var canProj = !!d.project && replayAt === null;
+        var ahead = canProj && show.proj ? Math.min(d.project * 60000, now - t0) : 0;
+        var t1 = now + ahead;
         var span = Math.max(1, t1 - t0);
-        // During [REPLAY], nothing after the moment it has reached
-        var cutoff = replayAt === null ? Infinity : replayAt;
+        // During [REPLAY], nothing after the moment it has reached (and never anything after now)
+        var cutoff = replayAt === null ? now : replayAt;
         // Last reading in each column, your damage within it, and FOG (see lib.js)
         var colsData = bucketColumns(points, fog, t0, span, cols, cutoff);
         var vals = colsData.vals, phases = colsData.phases, online = colsData.online, mine = colsData.mine;
         var fogCols = colsData.fogCols;
+        var evCols = eventColumns(d.events || [], t0, span, cols, cutoff); // see lib.js
         var maxMine = Math.max.apply(null, mine.filter(function(n) { return n; }).concat([0]));
         var maxOnline = Math.max.apply(null, online.filter(function(n) { return n !== null; }).concat([0]));
         // Whether there's anything to switch, before switching it off
@@ -278,6 +300,45 @@ function makeGraph(pane, source, rowsFor) {
             if (cell && !isLine(cell)) grid[rows - 1][k] = { ch: topText[k], cls: "mark" };
         });
 
+        // Kill estimate: a faint : line from the last HP down to 0 at the estimated kill, in the
+        // room kept on the right
+        if (ahead) {
+            var lastHp = points[points.length - 1][1];
+            for (var pc = 0; pc < cols; pc++) {
+                var pt = t0 + span * (pc + 0.5) / cols;
+                if (pt <= now) continue;
+                var projHp = lastHp * (1 - (pt - now) / (d.project * 60000));
+                if (projHp < 0) break;
+                var py = Math.round(Math.min(max, projHp) / max * (rows - 1));
+                var cut = pc === cols - 1 && py > 0;
+                if (grid[py][pc].cls === null || cut) grid[py][pc] = { ch: cut ? ">" : ":", cls: "proj" };
+            }
+        }
+        // [VS LAST]: the previous boss's HP (as a share of its max) at the same time into its
+        // fight, as faint , marks
+        var prev = d.prev && d.prev.points.length > 1 ? d.prev : null;
+        vsBtn.hidden = !prev;
+        vsBtn.classList.toggle("omhp-on", !!prev && show.vs);
+        if (prev && show.vs) {
+            var pFirst = prev.points[0][0];
+            var pVals = bucketColumns(prev.points, [], pFirst + (t0 - first), span, cols,
+                Math.min(prev.points[prev.points.length - 1][0], pFirst + (cutoff - first))).vals;
+            for (var vc = 0; vc < cols; vc++) {
+                if (pVals[vc] === null) continue;
+                var vy = Math.round(Math.max(0, Math.min(1, pVals[vc] / prev.max)) * (rows - 1));
+                if (grid[vy][vc].cls === null || grid[vy][vc].cls === "fill") grid[vy][vc] = { ch: ",", cls: "vs" };
+            }
+        }
+        // World events along the bottom row: the event's first letter where it starts, = after
+        var hasEvents = evCols.some(Boolean);
+        if (show.events) {
+            for (var ec = 0; ec < cols; ec++) {
+                if (!evCols[ec] || isLine(grid[0][ec])) continue;
+                var startsHere = ec === 0 || evCols[ec - 1] !== evCols[ec];
+                grid[0][ec] = { ch: startsHere ? eventLabel(evCols[ec]).charAt(0) : "=", cls: "event" };
+            }
+        }
+
         var frag = document.createDocumentFragment();
         // Right axis, on the top, middle and bottom rows: players online, then your damage
         // per column (both on their own 0..peak scales, like the marks they label)
@@ -325,18 +386,30 @@ function makeGraph(pane, source, rowsFor) {
             frag.appendChild(document.createTextNode("\n"));
         }
         frag.appendChild(document.createTextNode(" ".repeat(LABEL) + "+" + "-".repeat(cols) + (RIGHT ? "+" : "") + "\n"));
-        var left = "-" + ago(span), right = d.endLabel || "now";
+        var left = "-" + ago(now - t0), right = ahead ? "kill in ~" + dur(d.project) : d.endLabel || "now";
         frag.appendChild(document.createTextNode(" ".repeat(LABEL + 1) + left +
             " ".repeat(Math.max(1, cols - left.length - right.length)) + right + "\n"));
         // Legend: [series it switches (or null), colour class, mark, label]. Click an entry
-        // to hide or show that series.
-        frag.appendChild(document.createTextNode(" ".repeat(LABEL + 1)));
+        // to hide or show that series. It wraps at the plot's width.
+        var indent = " ".repeat(LABEL + 1), width = LABEL + 1 + cols + RIGHT + (RIGHT ? 1 : 0), used = indent.length;
+        frag.appendChild(document.createTextNode(indent));
         [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"], ["heal", "heal", "^", "heal"], ["phase", "mark", ":", "phase"]]
             .concat(hasOnline ? [["online", "online", "*", "online"]] : [])
             .concat(hasMine ? [["mine", "mine", "+", "your dmg"]] : [])
             .concat(hasFog ? [["fog", "fog", "~", "fog"]] : [])
+            .concat(hasEvents ? [["events", "event", "=", "events"]] : [])
+            .concat(canProj ? [["proj", "proj", ":", "kill est."]] : [])
+            .concat(prev && show.vs ? [["vs", "vs", ",", "last boss"]] : [])
             .forEach(function(item, i) {
-                if (i) frag.appendChild(document.createTextNode("  "));
+                var len = item[3].length + 2;
+                if (i && used + 2 + len > width) {
+                    frag.appendChild(document.createTextNode("\n" + indent));
+                    used = indent.length;
+                } else if (i) {
+                    frag.appendChild(document.createTextNode("  "));
+                    used += 2;
+                }
+                used += len;
                 var entry = document.createElement("span");
                 var on = !item[0] || show[item[0]];
                 if (item[0]) {
@@ -355,14 +428,14 @@ function makeGraph(pane, source, rowsFor) {
         plot.replaceChildren(frag);
         // What this render shows, for the hover readout
         view = {
-            t0: t0, span: span, cols: cols, label: LABEL, rows: rows, cw: cw, lineH: lineH, max: max, end: t1,
+            t0: t0, span: span, cols: cols, label: LABEL, rows: rows, cw: cw, lineH: lineH, max: max, end: now, events: evCols,
             vals: vals, phases: phases, online: online, mine: mine, fogCols: fogCols,
             lastT: Math.min(cutoff, points[points.length - 1][0])
         };
         if (hoverX !== null) showHover(hoverX);
 
         headText.textContent = replayAt !== null ? "REPLAY · " + hhmm(replayAt) + " · " + ago(replayAt - first) + " in"
-            : d.label(t0, span, zoomed);
+            : d.label(t0, now - t0, zoomed);
         head.title = d.title || "";
     }
 
@@ -397,10 +470,10 @@ function maxHpOf(points) {
 // to 300 points, for the last 20 bosses
 var GRAPHS_KEY = "omhp.bossgraphs";
 
-function archiveGraph(seq, points, fog, max) {
+function archiveGraph(seq, points, fog, max, events) {
     if (points.length < 2) return;
     var all = loadSaved(GRAPHS_KEY);
-    all[seq] = { p: packPoints(shrinkPoints(points, 300)), f: fog.slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
+    all[seq] = { p: packPoints(shrinkPoints(points, 300)), f: fog.slice(-50), e: (events || []).slice(-50), max: max || maxHpOf(points), end: points[points.length - 1][0] };
     var out = {};
     Object.keys(all).sort(function(a, b) { return Number(b) - Number(a); }).slice(0, 20).forEach(function(k) { out[k] = all[k]; });
     save(GRAPHS_KEY, out);
@@ -470,14 +543,14 @@ function openBossGraph(seq, name) {
     var points = savedPoints, end = saved.end || points[points.length - 1][0];
     makeGraph(pane, function() {
         return {
-            points: points, fog: saved.f || [], max: saved.max || maxHpOf(points), end: end, endLabel: hhmm(end),
+            points: points, fog: saved.f || [], events: saved.e || [], max: saved.max || maxHpOf(points), end: end, endLabel: hhmm(end),
             label: function(t0, span, zoomed) {
                 return (zoomed ? "LAST " : "HP FROM " + hhmm(points[0][0]) + " · ") + dur(span / 60000);
             },
             title: "boss #" + seq + "'s HP while you watched it"
         };
     }, function(headH, lineH) {
-        return Math.max(8, Math.min(40, Math.floor((pane.clientHeight - headH - 3 * lineH) / lineH)));
+        return Math.max(8, Math.min(40, Math.floor((pane.clientHeight - headH - 4 * lineH) / lineH)));
     });
 }
 
@@ -507,12 +580,13 @@ function bossGraph() {
     var boss = store.boss || null;
     var points = historyPoints(store); // [time, hp, phase, online, your lifetime damage]
     var fog = Array.isArray(store.f) ? store.f : []; // [start, end] of each FOG while you watched
+    var events = Array.isArray(store.e) ? store.e : []; // [start, end, kind] of each other world event
     var maxHp = null;
 
     var leading = false; // this tab records the history (see isLeader)
 
     function persist() {
-        if (leading) save(KEY, { v: 3, boss: boss, p: packPoints(points), f: fog }); // v3: packed (see lib.js)
+        if (leading) save(KEY, { v: 3, boss: boss, p: packPoints(points), f: fog, e: events }); // v3: packed (see lib.js)
     }
 
     // FOG is on: stretch the current fog span to now, or start a new one
@@ -524,9 +598,32 @@ function bossGraph() {
         if (fog.length > 200) fog.shift();
     }
 
+    // A world event is running: stretch its span to now, or start a new one
+    function markEvent(kind) {
+        var now = Date.now();
+        var last = events[events.length - 1];
+        if (last && last[2] === kind && now - last[1] < 20000) last[1] = now;
+        else events.push([now, now, kind]);
+        if (events.length > 100) events.shift();
+    }
+
+    // The previous boss's saved fight, for [VS LAST] (looked up again when a fight is filed)
+    var prevCache = null;
+    function prevFight() {
+        if (prevCache && prevCache.boss === boss) return prevCache.fight;
+        var all = loadSaved(GRAPHS_KEY);
+        var seqs = Object.keys(all).filter(function(k) { return Number(k) < Number(boss); })
+            .sort(function(a, b) { return Number(b) - Number(a); });
+        var g = seqs.length ? all[seqs[0]] : null;
+        var pts = historyPoints(g);
+        prevCache = { boss: boss, fight: pts.length > 1 ? { points: pts, max: g.max || maxHpOf(pts) } : null };
+        return prevCache.fight;
+    }
+    document.addEventListener("omhp-graphs", function() { prevCache = null; });
+
     var graph = makeGraph(pane, function() {
         return {
-            points: points, fog: fog, end: Date.now(),
+            points: points, fog: fog, events: events, end: Date.now(), project: etaMins, prev: prevFight(),
             max: maxHp || numberIn(hpMax) || maxHpOf(points),
             label: function(t0, span, zoomed) {
                 if (fogged()) return "HP · FOG — PAUSED";
@@ -536,7 +633,7 @@ function bossGraph() {
         };
     }, function(headH, lineH) {
         // As tall as the art beside it, less the heading and the time axis
-        return Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - headH - 3 * lineH) / lineH)));
+        return Math.max(8, Math.min(32, Math.floor((stage.offsetHeight - headH - 4 * lineH) / lineH)));
     });
 
     function sample() {
@@ -560,12 +657,14 @@ function bossGraph() {
         var num = String(b.seq);
         if (num !== boss) {
             // A new boss: keep the last one's fight for BOSSES' [GRAPH], then start over
-            if (boss !== null) archiveGraph(boss, points, fog, maxHp);
+            if (boss !== null) archiveGraph(boss, points, fog, maxHp, events);
             boss = num;
             points = [];
             fog = [];
+            events = [];
         }
         if (b.max) maxHp = b.max;
+        if (b.event && b.event.kind && b.event.kind !== "fog") markEvent(b.event.kind);
         var me = myTotals();
         points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
         // Long fights: thin out the older half instead of dropping the start
@@ -579,12 +678,14 @@ function bossGraph() {
     every(15000, persist);
     window.addEventListener("pagehide", persist);
     window.addEventListener("storage", function(e) {
+        if (e.key === GRAPHS_KEY) prevCache = null;
         if (e.key !== KEY || leading) return;
         var saved = loadSaved(KEY);
         if (saved.v !== 2 && saved.v !== 3) return;
         boss = saved.boss || null;
         points = historyPoints(saved);
         fog = Array.isArray(saved.f) ? saved.f : [];
+        events = Array.isArray(saved.e) ? saved.e : [];
         if (!document.hidden) graph.draw();
     });
     document.addEventListener("visibilitychange", function() {

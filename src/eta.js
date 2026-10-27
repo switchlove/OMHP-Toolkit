@@ -1,5 +1,6 @@
 // The latest kill estimate ("~39m"), or "" while there isn't one; used by the tab title
 var etaShort = "";
+var etaMins = null; // the same in minutes, for the graph's projection
 
 // Under the HP numbers: how fast the boss is losing HP and when it should die.
 function bossEta() {
@@ -19,6 +20,7 @@ function bossEta() {
 
     function sample() {
         etaShort = "";
+        etaMins = null;
         var dead = document.getElementById("boss-dead");
         if (dead && !dead.hidden) {
             line.textContent = "";
@@ -26,7 +28,7 @@ function bossEta() {
         }
         // FOG hides the boss's HP on purpose: don't measure (or reveal) anything meanwhile
         if (fogged()) {
-            line.textContent = "FOG · ESTIMATE PAUSED";
+            line.textContent = (eventTag(false) || "FOG") + " · ESTIMATE PAUSED";
             return;
         }
         var b = trueBoss();
@@ -36,13 +38,15 @@ function bossEta() {
             samples = [];
         }
         var hp = b.hp;
+        // A world event running: its name and time left lead the line
+        var tag = eventTag(true), pre = tag ? tag + " · " : "";
         var now = Date.now();
         samples.push({ t: now, hp: hp, dmg: typeof b.dmg === "number" ? b.dmg : null });
         while (samples.length && now - samples[0].t > RATE_MS) samples.shift();
 
         var main = rateOver(samples, now, 5); // see lib.js
         if (!main) {
-            line.textContent = "MEASURING…";
+            line.textContent = pre + "MEASURING…";
             return;
         }
         var first = main.first, minutes = main.minutes, perMin = main.perMin;
@@ -55,15 +59,16 @@ function bossEta() {
         var healed = typeof b.dmg === "number" && b.max ? b.dmg - (b.max - b.hp) : 0;
         dps += healed > 0 ? " · HEALED " + short(healed) : "";
         if (perMin <= 0) {
-            line.textContent = "HOLDING" + dps;
+            line.textContent = pre + "HOLDING" + dps;
             return;
         }
         etaShort = "~" + dur(hp / perMin);
+        etaMins = hp / perMin;
         // The spread of the other windows' estimates, when it says something
         var etas = etaMinutes(samples, now, WINDOWS);
         var lo = Math.min.apply(null, etas), hi = Math.max.apply(null, etas);
         var range = etas.length > 1 && hi - lo >= 2 ? " (" + dur(lo).replace(/m$/, "") + "–" + dur(hi) + ")" : "";
-        line.textContent = "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort + range;
+        line.textContent = pre + "≈ " + fmt(perMin) + " HP/MIN" + dps + " · DOWN IN " + etaShort + range;
         line.title = "estimate from the last 5 minutes; the range is what the last 1 and 15 minutes say";
     }
 

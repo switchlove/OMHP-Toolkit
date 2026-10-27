@@ -193,3 +193,32 @@ test("packPoints / unpackPoints: a round trip", () => {
 test("packPoints / unpackPoints: nothing yet", () => {
     same(lib.unpackPoints(lib.packPoints([])), []);
 });
+
+test("titleWith: a FOG countdown is replaced too", () => {
+    assert.equal(lib.titleWith("(3/5) [FOG 1:42] ONE MILLION HP", "[50%]"), "(3/5) [50%] ONE MILLION HP");
+    assert.equal(lib.titleWith("(3/5) [72% ~39m · MERCHANT 1:42] ONE MILLION HP", ""), "(3/5) ONE MILLION HP");
+});
+
+test("eventLabel", () => {
+    assert.equal(lib.eventLabel("merchant"), "MERCHANT");
+    assert.equal(lib.eventLabel("laststand"), "LAST STAND");
+    assert.equal(lib.eventLabel("big_deal"), "BIG DEAL");
+});
+
+test("clockDur", () => {
+    assert.equal(lib.clockDur(0), "0:00");
+    assert.equal(lib.clockDur(102000), "1:42");
+    assert.equal(lib.clockDur(3723000), "1:02:03");
+    assert.equal(lib.clockDur(-5000), "0:00");
+});
+
+test("eventColumns", () => {
+    same(lib.eventColumns([[10, 25, "merchant"]], 0, 40, 4, Infinity), [null, "merchant", "merchant", null]);
+    same(lib.eventColumns([[10, 25, "merchant"]], 0, 40, 4, 15), [null, "merchant", null, null]);
+});
+
+test("streakDays", () => {
+    assert.equal(lib.streakDays(["2026-10-24", "2026-10-25", "2026-10-26"], "2026-10-26"), 3);
+    assert.equal(lib.streakDays(["2026-10-24", "2026-10-26"], "2026-10-26"), 1);
+    assert.equal(lib.streakDays([], "2026-10-26"), 0);
+});

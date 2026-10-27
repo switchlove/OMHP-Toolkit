@@ -38,7 +38,7 @@ function floatingPanels() {
     btn.className = "btn-text omhp-popout";
     btn.textContent = "[POP OUT]";
     btn.title = "open this panel in a floating window";
-    tabs.appendChild(btn);
+    tabTools(tabs).appendChild(btn);
 
     function selectedKey() {
         var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');

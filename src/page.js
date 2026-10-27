@@ -44,12 +44,18 @@ function paintAccount() {
                 // The boss's real numbers for the rest of the script. During the FOG world
                 // event the site draws fake HP on screen, but its own data stays true.
                 const out = document.getElementById("omhp-boss-data");
+                // The running world event, with its times in this computer's clock (the site's are
+                // the server's, in seconds); id tells one event from the next
+                const localEvent = (ev) => ev && ev.kind ? {
+                    kind: ev.kind, stage: ev.stage ?? null, name: ev.name ?? null, id: ev.started_at ?? null,
+                    until: ev.until ? Math.round(Date.now() + (ev.until - store.now()) * 1000) : null
+                } : null;
                 const publish = () => {
                     const b = store.state.boss;
                     if (!out || !b) return;
                     out.dataset.boss = JSON.stringify({
                         seq: b.seq, name: b.name, hp: b.hp, max: b.max_hp, phase: b.phase,
-                        dmg: b.total_damage, alive: b.status === "alive"
+                        dmg: b.total_damage, alive: b.status === "alive", event: localEvent(b.event)
                     });
                 };
                 store.on("boss", publish);
@@ -247,6 +253,40 @@ function paintAccount() {
             .catch(() => {
                 const out = document.getElementById("omhp-boss-data");
                 if (out) out.dataset.fail = [out.dataset.fail, "HOVER CARDS"].filter(Boolean).join(", ");
+            });
+        // DAILY (shown by the CLOCK): when the next daily reward comes, and whether today's is
+        // claimed. Asked every 10 minutes, just after it resets, and (while it's waiting) a
+        // minute after your data changes, which is when you claim it.
+        if (${isOn("clock")}) Promise.all([
+            import(${JSON.stringify(base + "store.js" + v)}),
+            import(${JSON.stringify(base + "api.js" + v)})
+        ])
+            .then(([store, api]) => {
+                const out = document.getElementById("omhp-boss-data");
+                let timer = 0, asked = 0, claimed = null;
+                const load = async () => {
+                    clearTimeout(timer);
+                    asked = Date.now();
+                    let wait = 600000;
+                    try {
+                        if (store.state.me?.name_chosen) {
+                            const d = await api.getDaily();
+                            const next = Math.round(Date.now() + ((d?.next_reset ?? 0) - store.now()) * 1000);
+                            claimed = !!d?.claimed_today;
+                            out.dataset.daily = JSON.stringify({ next, claimed });
+                            if (next > Date.now()) wait = Math.min(wait, next - Date.now() + 5000);
+                        }
+                    } catch (e) { /* not logged in, or the site is busy: ask again later */ }
+                    timer = setTimeout(load, wait);
+                };
+                store.on("me", () => {
+                    if (claimed !== true && Date.now() - asked > 60000) load();
+                });
+                load();
+            })
+            .catch(() => {
+                const out = document.getElementById("omhp-boss-data");
+                if (out) out.dataset.fail = [out.dataset.fail, "DAILY"].filter(Boolean).join(", ");
             });
     `;
     var script = document.createElement("script");

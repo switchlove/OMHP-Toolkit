@@ -29,7 +29,7 @@ function pinPanel() {
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn-text omhp-pin";
-    tabs.appendChild(btn);
+    tabTools(tabs).appendChild(btn);
 
     var pins = []; // { key, panel, home, slot, grip, keepShown }, top to bottom
 

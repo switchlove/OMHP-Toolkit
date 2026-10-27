@@ -32,7 +32,7 @@ function hhmm(t) {
 // The tab title with our part ("[72% ~39m]", "[FOG]", or "" for none) after the site's
 // attack count: "(3/5) ONE MILLION HP" -> "(3/5) [72% ~39m] ONE MILLION HP". A title a
 // world event is flashing ("(!) ...") is left as it is.
-var TITLE_PART = /\[(?:FOG|\d[\d.]*%[^\]]*)\] ?/;
+var TITLE_PART = /\[(?:FOG[^\]]*|\d[\d.]*%[^\]]*)\] ?/;
 
 function titleWith(title, part) {
     if (/^\(!\)/.test(title)) return title;
@@ -236,4 +236,42 @@ function unpackPoints(packed) {
         prevMine = mine;
         return [t, r[1], r[2] == null ? null : r[2], r[3] == null ? null : r[3], mine];
     });
+}
+
+// World event kinds as short names for the title and graph: "laststand" -> "LAST STAND"
+var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND" };
+
+function eventLabel(kind) {
+    return EVENT_NAMES[kind] || String(kind || "event").replace(/_/g, " ").toUpperCase();
+}
+
+// A countdown as a clock: 102000 -> "1:42", 3723000 -> "1:02:03"
+function clockDur(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000));
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0");
+}
+
+// For each of `cols` columns from t0 over `span` ms, the kind of world event running in it
+// (events are [start, end, kind]), or null. Nothing after `cutoff`.
+function eventColumns(events, t0, span, cols, cutoff) {
+    var out = [];
+    for (var c = 0; c < cols; c++) {
+        var start = t0 + span * c / cols, end = t0 + span * (c + 1) / cols;
+        var hit = start > cutoff ? null : events.filter(function(e) { return e[0] < end && e[1] >= start; })[0];
+        out.push(hit ? hit[2] : null);
+    }
+    return out;
+}
+
+// How many days in a row you've played up to `day` ("YYYY-MM-DD"), from the days you played
+function streakDays(days, day) {
+    var set = {};
+    days.forEach(function(d) { set[d] = true; });
+    var n = 0, d = new Date(day + "T12:00:00");
+    while (set[today(d)]) {
+        n++;
+        d.setDate(d.getDate() - 1);
+    }
+    return n;
 }

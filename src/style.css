@@ -97,6 +97,14 @@ html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]) { 
 html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
 /* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
 html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
+/* GAME's sub-menus (COMMUNITY >, HELP >): their tabs join the line, the headings go */
+html.omhp-flattabs #tabs .tab-sub { display: contents; }
+html.omhp-flattabs #tabs .tab-subcat { display: none; }
+html.omhp-flattabs #tabs .tab-submenu, html.omhp-flattabs #tabs .tab-submenu[hidden] { display: contents !important; }
+/* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
+html.omhp-flattabs #tabs { position: relative; }
+html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; white-space: nowrap; }
+html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
 
 /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
 #omhp-eta { font-size: 12px; letter-spacing: .08em; margin-top: 2px; }
@@ -138,6 +146,17 @@ html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] {
 .omhp-graph-win .omhp-float-body { padding: 6px 10px 10px; }
 .omhp-graph-win .omhp-graph { flex: 1 1 0; min-height: 0; }
 .omhp-replay:hover { color: var(--fg); }
+/* World events, the kill estimate and [VS LAST] on the graph */
+.omhp-graph-plot .event { color: var(--amber); }
+.omhp-graph-plot .proj { color: var(--fg); opacity: .45; }
+.omhp-graph-plot .vs { color: var(--blue); opacity: .55; }
+.omhp-graph-head .omhp-on { color: var(--fg); }
+.omhp-graph-head button[hidden] { display: none; }
+.omhp-daily-ready { color: var(--amber); }
+/* A record just broken (SESSION) */
+.omhp-sess-cell.omhp-rec { border-bottom-color: var(--amber); }
+.omhp-sess-cell.omhp-rec .v { color: var(--amber); }
+.omhp-rec-note { color: var(--amber); font-size: 10px; letter-spacing: .1em; margin-right: 6px; }
 
 /* FILTER: hidden and highlighted lines in ATTACKS and CHAT, and the boxes to set them */
 #feed li.omhp-hide, #chat-list li.omhp-hide { display: none; }
@@ -294,7 +313,7 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 .col-side .box-card-actions .inline-btn, .omhp-float .box-card-actions .inline-btn {
     font-size: 11px; padding: 1px 2px; letter-spacing: 0;
 }
-#tabs .omhp-pin { font-size: 11px; padding: 2px 4px; margin-left: 6px; color: var(--dim); }
+#tabs .omhp-pin { font-size: 11px; padding: 2px 4px; color: var(--dim); }
 #tabs .omhp-pin:hover { color: var(--fg); }
 
 /* Pop-out windows: [POP OUT] for the open right-hand panel, ⧉ on left sections */
@@ -371,7 +390,7 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 .omhp-reset { font-size: 10px; color: var(--faint); margin-left: 6px; }
 .omhp-reset:hover { color: var(--fg); }
 .omhp-health { color: var(--red); cursor: help; }
-#omhp-days { white-space: pre; font-size: 11px; line-height: 1.35; color: var(--dim); overflow-x: auto; margin-top: 4px; }
-#omhp-days[hidden] { display: none; }
+#omhp-days, #omhp-records { white-space: pre; font-size: 11px; line-height: 1.35; color: var(--dim); overflow-x: auto; margin-top: 4px; }
+#omhp-days[hidden], #omhp-records[hidden] { display: none; }
 .foot { margin-top: 8px; }
 .foot > p:not(#err) { display: none; }

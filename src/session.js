@@ -127,22 +127,56 @@ function sessionStats() {
     });
     daysBtn.textContent = "[DAYS]";
 
+    // [RECORDS]: your all-time bests. A new one flashes its cell and says so for a few seconds
+    // (today's damage and the streak only once a day).
+    var recBox = document.createElement("div");
+    recBox.id = "omhp-records";
+    recBox.hidden = true;
+    panel.appendChild(recBox);
+    var recBtn = resetButton("your all-time bests", function() {
+        recBox.hidden = !recBox.hidden;
+        if (!recBox.hidden) paintRecords();
+    });
+    recBtn.textContent = "[RECORDS]";
+    var recNote = document.createElement("span");
+    recNote.className = "omhp-rec-note";
+    var flash = { kind: null, until: 0 }, flashed = {};
+    document.addEventListener("omhp-record", function(e) {
+        var kind = e.detail;
+        if ((kind === "day" || kind === "streak") && flashed[kind] === today()) return;
+        flashed[kind] = today();
+        flash = { kind: kind, until: Date.now() + 8000 };
+        paint();
+        setTimeout(paint, 8100);
+        if (!recBox.hidden) paintRecords();
+    });
+
+    tools.appendChild(recNote);
     tools.appendChild(daysBtn);
+    tools.appendChild(recBtn);
     tools.appendChild(reset);
 
     // One label / value cell of the grid
+    // (The cells stay and only their text changes: SESSION repaints with every attack, and a
+    // replaced cell would drop its tooltip before it shows.)
+    var cellsByLabel = {};
     function cell(label, value, tip) {
-        var c = document.createElement("div");
-        c.className = "omhp-sess-cell";
-        if (tip) c.title = tip;
-        var k = document.createElement("span");
-        k.className = "k";
-        k.textContent = label;
-        var v = document.createElement("span");
-        v.className = "v";
-        v.textContent = value;
-        c.appendChild(k);
-        c.appendChild(v);
+        var c = cellsByLabel[label];
+        if (!c) {
+            c = cellsByLabel[label] = document.createElement("div");
+            c.className = "omhp-sess-cell";
+            var k = document.createElement("span");
+            k.className = "k";
+            k.textContent = label;
+            var v = document.createElement("span");
+            v.className = "v";
+            c.appendChild(k);
+            c.appendChild(v);
+        }
+        if (c.lastChild.textContent !== value) c.lastChild.textContent = value;
+        if (tip) {
+            if (c.title !== tip) c.title = tip;
+        } else if (c.hasAttribute("title")) c.removeAttribute("title");
         return c;
     }
 
@@ -163,7 +197,20 @@ function sessionStats() {
             cell("SHARDS/HR", timed ? fmt(s.shards.earned / hours) : "--", "shards earned per hour of play today"),
             cell("PLAYED", dur(s.activeMs / 60000), "time today with the game open")
         ];
-        grid.replaceChildren.apply(grid, cells);
+        // THIS BOSS: your damage on the boss now, by phase on hover (BOSSES keeps the count)
+        var cur = loadJSON("omhp.bosscur", null);
+        if (cur && cur.ph && Object.keys(cur.ph).length) {
+            var onBoss = Object.keys(cur.ph).reduce(function(n, k) { return n + cur.ph[k][0]; }, 0);
+            cells.push(cell("THIS BOSS", fmt(onBoss), "your damage on this boss, by phase" + phaseLines(cur.ph)));
+        }
+        // A record just broken: flash its cell
+        var live = flash.until > Date.now() ? flash.kind : null;
+        cells.forEach(function(x) {
+            x.classList.toggle("omhp-rec", !!live && x.firstChild.textContent === REC_CELLS[live]);
+        });
+        recNote.textContent = live ? "NEW RECORD: " + REC_NAMES[live] + " " : "";
+        var same = grid.children.length === cells.length && cells.every(function(x, i) { return grid.children[i] === x; });
+        if (!same) grid.replaceChildren.apply(grid, cells);
     }
 
     // SESSION's tooltip: the size of your last (up to 200) hits, smallest to biggest
@@ -225,6 +272,42 @@ function sessionStats() {
         });
     }
 
+    var streakDay = null; // the day the streak record was last checked
+
+    // The days you attacked on (from DAYS), and today if you have
+    function playedDays(withToday) {
+        var days = loadSaved(DAYS_KEY);
+        var out = Object.keys(days).filter(function(k) { return (days[k].session || {}).hits; });
+        return withToday ? out.concat([today()]) : out;
+    }
+
+    // [RECORDS]: one line per record, with the day it was set
+    function paintRecords() {
+        var r = loadSaved(RECORDS_KEY);
+        var when = function(x) { return x && x.d ? x.d.slice(5) : ""; };
+        var s = load();
+        var playing = sessionCounts(s, myTotals() || s.last).hits > 0;
+        var lines = [
+            ["BIGGEST HIT", r.hit ? fmt(r.hit.v) : "-", when(r.hit)],
+            ["BEST DAY", r.day ? fmt(r.day.v) : "-", when(r.day)],
+            ["BEST SHARE", r.share ? r.share.v.toFixed(2) + "% (#" + r.share.seq + ")" : "-", when(r.share)],
+            ["RAREST DROP", r.drop ? r.drop.text : "-", when(r.drop)],
+            ["STREAK", streakDays(playedDays(playing), today()) + " DAYS (BEST " + (r.streak ? r.streak.v : 0) + ")", ""]
+        ];
+        recBox.textContent = lines.map(function(l) { return l[0].padEnd(12) + " " + String(l[1]).padEnd(24) + " " + l[2]; }).join("\n");
+    }
+
+    // Bests from before v0.30 (the DAYS table) count too
+    (function seedRecords() {
+        var days = loadSaved(DAYS_KEY), rec = loadSaved(RECORDS_KEY), before = JSON.stringify(rec);
+        Object.keys(days).forEach(function(d) {
+            var x = days[d].session || {};
+            if (x.best && !(rec.hit && rec.hit.v >= x.best)) rec.hit = { v: x.best, d: d };
+            if (x.dmg && !(rec.day && rec.day.v >= x.dmg)) rec.day = { v: x.dmg, d: d };
+        });
+        if (JSON.stringify(rec) !== before) save(RECORDS_KEY, rec);
+    })();
+
     function readDamage() {
         var t = myTotals();
         if (!t) return readScreen();
@@ -240,6 +323,15 @@ function sessionStats() {
                 else if (d < 0) s.shards.spent -= d;
                 s.shards.last = t.shards;
             }
+            // Records: today's damage, and how many days in a row you've played (checked daily)
+            if (isLeader()) {
+                var c = sessionCounts(s, t);
+                if (c.dmg > 0) bumpRecord("day", c.dmg);
+                if (c.hits > 0 && streakDay !== today()) {
+                    streakDay = today();
+                    bumpRecord("streak", streakDays(playedDays(true), today()));
+                }
+            }
         });
     }
 
@@ -249,6 +341,7 @@ function sessionStats() {
         if (n === null) return;
         update(function(s) {
             s.best = Math.max(s.best, n);
+            bumpRecord("hit", n);
             s.sizes = (s.sizes || []).concat([n]).slice(-200);
         });
     }

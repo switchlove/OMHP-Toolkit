@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.29
+// @version      0.30
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -43,7 +43,10 @@
 //     readout for that moment, and clicking a legend entry hides or shows it.
 //   - Under the HP: HP/min, everyone's DMG/min, HP healed, and an estimated kill time
 //     with a range (what the last 1 and 15 minutes say).
-//   - [ALL] [1H] [15M] on the graph zoom in on the recent part of a long fight.
+//   - [ALL] [1H] [15M] on the graph zoom in on the recent part of a long fight. World
+//     events run along its bottom row, a faint line on the right runs down to the
+//     estimated kill, and [VS LAST] lays the previous boss's fight over this one.
+//   - While a world event runs, its name and time left lead the ETA line and the title.
 //   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
 //     peak players online and HP healed; [GRAPH] opens its HP graph in a window.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
@@ -52,7 +55,10 @@
 //   - YOUR SHARE: your percentage of all the damage on this boss.
 //   - SESSION (its own box under FIGHT): your damage today, per hour, attacks, best and
 //     average hit, crit rate, shards earned and spent, shards per hour and time played.
-//     Kept across reloads until [RESET] or a new day; [DAYS] shows the last 14 days.
+//     Kept across reloads until [RESET] or a new day; [DAYS] shows the last 14 days and
+//     [RECORDS] your all-time bests (biggest hit, best day, best share, rarest drop, days
+//     in a row), with a flash when you set a new one. THIS BOSS: your damage on the boss,
+//     by phase on hover (BOSSES lists each boss's events and phases too).
 //     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
 //     your attacks sat full, recharging nothing.
@@ -68,7 +74,8 @@
 //     of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it)
 //     and COPY DEBUG (details for a bug report). Settings changed in one tab apply in
 //     your other open tabs at once.
-//   - Local time and how long the page has been open.
+//   - Local time, how long the page has been open, and the next DAILY reward (READY when
+//     it's waiting; NOTIFY reminds you once a day).
 //   - The account button shows your badges and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
 //
