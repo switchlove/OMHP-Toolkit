@@ -11,6 +11,7 @@ function moveSections() {
     }
 
     pinMain();
+    hoverTips();
     paintAccount(); // always: it also publishes the boss data (see trueBoss)
     run("graph", bossGraph);
     run("eta", bossEta);
@@ -25,7 +26,11 @@ function moveSections() {
     run("keys", shortcuts);
     run("filters", lineFilters);
     run("boxorder", bagBoxOrder);
+    run("watch", auctionWatch);
+    run("chatplus", chatPlus);
+    soundAlerts();
     clanFold();
+    shopTicks();
     pinPanel();
     floatingPanels();
     run("loot", lootLog);

@@ -174,9 +174,7 @@ function sessionStats() {
             c.appendChild(v);
         }
         if (c.lastChild.textContent !== value) c.lastChild.textContent = value;
-        if (tip) {
-            if (c.title !== tip) c.title = tip;
-        } else if (c.hasAttribute("title")) c.removeAttribute("title");
+        setTip(c, tip);
         return c;
     }
 

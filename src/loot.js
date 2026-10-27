@@ -145,7 +145,7 @@ function lootLog() {
         });
         summary.appendChild(chestsBtn);
         if (keys.length) summary.appendChild(reset);
-        summary.title = ratesTitle(st, hits);
+        setTip(summary, ratesTitle(st, hits));
     }
 
     function ratesTitle(st, hits) {

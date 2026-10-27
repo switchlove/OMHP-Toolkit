@@ -122,6 +122,58 @@ function tabTools(tabs) {
     return box;
 }
 
+// SOUNDS ([TOOLKIT]): which of the toolkit's own alerts play a sound. playSound(name) asks the
+// page script to play one of the site's sounds, which it only does while the site's [SND:ON]
+var SOUNDS_KEY = "omhp.layout.sounds";
+var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"], ["watch", "AUCTION MATCH"]];
+
+function playSound(name) {
+    if (!loadSaved(SOUNDS_KEY)[name]) return;
+    document.dispatchEvent(new CustomEvent("omhp-sound", { detail: name }));
+}
+
+// Tooltips that stay up while the page redraws under them (the browser's own vanish when what's
+// under the pointer changes, and SESSION changes with every attack): setTip(el, text) gives el
+// one, shown after a short pause over it and kept up to date while it's showing
+var tip = { box: null, over: null, timer: 0 };
+
+function setTip(el, text) {
+    if (!text) {
+        delete el.dataset.omhpTip;
+    } else if (el.dataset.omhpTip !== text) el.dataset.omhpTip = text;
+    if (tip.over === el && tip.box && !tip.box.hidden) showTip();
+}
+
+function showTip() {
+    var el = tip.over;
+    if (!el || !el.isConnected || !el.dataset.omhpTip) {
+        tip.box.hidden = true;
+        return;
+    }
+    tip.box.textContent = el.dataset.omhpTip;
+    tip.box.hidden = false;
+    var r = el.getBoundingClientRect();
+    tip.box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - tip.box.offsetWidth - 4)) + "px";
+    var below = r.bottom + 4;
+    tip.box.style.top = (below + tip.box.offsetHeight > window.innerHeight ? r.top - tip.box.offsetHeight - 4 : below) + "px";
+}
+
+function hoverTips() {
+    tip.box = document.createElement("div");
+    tip.box.className = "omhp-tip";
+    tip.box.hidden = true;
+    document.body.appendChild(tip.box);
+    document.addEventListener("mouseover", function(e) {
+        var el = e.target instanceof Element ? e.target.closest("[data-omhp-tip]") : null;
+        if (el === tip.over) return;
+        tip.over = el;
+        clearTimeout(tip.timer);
+        tip.box.hidden = true;
+        if (el) tip.timer = setTimeout(showTip, 350);
+    });
+    window.addEventListener("scroll", function() { tip.box.hidden = true; }, true);
+}
+
 // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
 // redraw of a site panel can be hundreds)
 function observeBatched(el, opts, fn) {
@@ -143,7 +195,7 @@ var FEATURES = [
     ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
     ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
     ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
-    ["cards", "HOVER CARDS", true],
+    ["cards", "HOVER CARDS", true], ["watch", "AUCTION WATCH", true], ["chatplus", "CHAT+", true],
     ["notify", "NOTIFY", false]
 ];
 var features = loadSaved(FEATURES_KEY);

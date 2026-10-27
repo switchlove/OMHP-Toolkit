@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.30
+// @version      0.31
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -26,7 +26,8 @@
 //   - The boss column and the right column stay pinned in view while you scroll.
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
 //     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
-//     with its own resize line and [UNPIN]. [POP OUT] opens it in a floating window.
+//     with its own resize line, [UNPIN] and [_] to fold it down to its name. [POP OUT]
+//     opens it in a floating window.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
 //     MEMBERS list folds away with [-] / [+] on its heading.
@@ -84,6 +85,9 @@
 //     Alt+T opens [TOOLKIT].
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
+//   - AUCTION WATCH: [+ THIS SEARCH] above the auction house watches your last search with a
+//     top price; a new listing at or under it is flagged (notification, lit AUCTION tab).
+//   - CHAT+: Shift-click a name in CHAT to reply (@NAME), hover a time for the full date.
 //   - HOVER CARDS: pause over a name in ATTACKS or CHAT for their place on this boss's
 //     board and their damage in the last 5 minutes.
 //   - [REPLAY] on the HP graph plays the boss's history back from the start.
@@ -93,7 +97,10 @@
 // ALERTS
 //   - The browser tab's title adds the boss's HP and kill estimate: "(3/5) [72% ~39m] ...".
 //   - NOTIFY (off by default): desktop notifications while the tab is in the background
-//     for full attacks, boss down / new boss, FOG, new messages and loot from a set rarity.
+//     for full attacks, boss down / new boss, FOG, new messages, loot from a set rarity,
+//     chat lines that mention you and AUCTION WATCH matches.
+//   - SOUNDS ([TOOLKIT]): the site's own sounds for a new boss, a mention or an auction
+//     match (only while the site's [SND:ON]).
 //
 // Your layout, sizes, order, colours, features, HP history, session and loot are saved in
 // localStorage. With the game open in several tabs, one records and the others follow it.
@@ -522,7 +529,7 @@
         html.omhp-flattabs #tabs .tab-submenu, html.omhp-flattabs #tabs .tab-submenu[hidden] { display: contents !important; }
         /* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
         html.omhp-flattabs #tabs { position: relative; }
-        html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; white-space: nowrap; }
+        html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; z-index: 31; white-space: nowrap; }
         html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
 
         /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
@@ -621,7 +628,14 @@
             font-size: 12px; text-align: left;
         }
         .omhp-sess-cell { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dotted var(--faint); }
-        .omhp-sess-cell[title] { cursor: help; }
+        .omhp-sess-cell[data-omhp-tip] { cursor: help; }
+        /* The toolkit's own tooltips (see setTip) */
+        .omhp-tip {
+            position: fixed; z-index: 130; max-width: 360px; padding: 4px 8px; pointer-events: none; white-space: pre-line;
+            background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+            font-size: 11px; line-height: 1.45; color: var(--fg); letter-spacing: .03em; text-align: left;
+        }
+        .omhp-tip[hidden] { display: none; }
         .omhp-sess-cell .k { color: var(--dim); font-size: 11px; letter-spacing: .1em; }
         .omhp-sess-cell .v { color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .omhp-sess-tools { margin-top: 6px; text-align: right; }
@@ -716,6 +730,18 @@
             background: var(--bg); padding: 0 2px;
         }
         .omhp-pin-x:hover { color: var(--fg); }
+        /* A folded pin: just its name, and no resize line */
+        .omhp-pin-name { display: none; font-size: 11px; color: var(--dim); letter-spacing: .12em; }
+        .omhp-pin-slot.folded { height: auto !important; min-height: 0; max-height: none; overflow: hidden; padding-bottom: 2px; }
+        .omhp-pin-slot.folded > .panel { display: none !important; }
+        .omhp-pin-slot.folded > .omhp-pin-name { display: block; }
+        .omhp-pin-slot.folded + .omhp-pin-grip { display: none; }
+        /* AUCTION WATCH: the watches and new matches above the auction house, and the lit-up tab */
+        .omhp-watch { margin: 0 0 8px; padding: 0 0 6px; border-bottom: 1px dashed var(--faint); font-size: 11px; text-align: left; }
+        .omhp-watch-head { color: var(--dim); letter-spacing: .12em; margin-top: 2px; }
+        .omhp-watch-row { padding-left: 1ch; color: var(--fg); }
+        .omhp-watch-row.dim { color: var(--dim); }
+        #tabs [role=tab].omhp-watch-lit:not([aria-selected="true"]) { color: var(--amber); text-decoration: underline; }
         .omhp-pin-grip { flex: none; margin: -4px 0 4px; }
         #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
 
@@ -938,6 +964,58 @@
         return box;
     }
 
+    // SOUNDS ([TOOLKIT]): which of the toolkit's own alerts play a sound. playSound(name) asks the
+    // page script to play one of the site's sounds, which it only does while the site's [SND:ON]
+    var SOUNDS_KEY = "omhp.layout.sounds";
+    var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"], ["watch", "AUCTION MATCH"]];
+
+    function playSound(name) {
+        if (!loadSaved(SOUNDS_KEY)[name]) return;
+        document.dispatchEvent(new CustomEvent("omhp-sound", { detail: name }));
+    }
+
+    // Tooltips that stay up while the page redraws under them (the browser's own vanish when what's
+    // under the pointer changes, and SESSION changes with every attack): setTip(el, text) gives el
+    // one, shown after a short pause over it and kept up to date while it's showing
+    var tip = { box: null, over: null, timer: 0 };
+
+    function setTip(el, text) {
+        if (!text) {
+            delete el.dataset.omhpTip;
+        } else if (el.dataset.omhpTip !== text) el.dataset.omhpTip = text;
+        if (tip.over === el && tip.box && !tip.box.hidden) showTip();
+    }
+
+    function showTip() {
+        var el = tip.over;
+        if (!el || !el.isConnected || !el.dataset.omhpTip) {
+            tip.box.hidden = true;
+            return;
+        }
+        tip.box.textContent = el.dataset.omhpTip;
+        tip.box.hidden = false;
+        var r = el.getBoundingClientRect();
+        tip.box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - tip.box.offsetWidth - 4)) + "px";
+        var below = r.bottom + 4;
+        tip.box.style.top = (below + tip.box.offsetHeight > window.innerHeight ? r.top - tip.box.offsetHeight - 4 : below) + "px";
+    }
+
+    function hoverTips() {
+        tip.box = document.createElement("div");
+        tip.box.className = "omhp-tip";
+        tip.box.hidden = true;
+        document.body.appendChild(tip.box);
+        document.addEventListener("mouseover", function(e) {
+            var el = e.target instanceof Element ? e.target.closest("[data-omhp-tip]") : null;
+            if (el === tip.over) return;
+            tip.over = el;
+            clearTimeout(tip.timer);
+            tip.box.hidden = true;
+            if (el) tip.timer = setTimeout(showTip, 350);
+        });
+        window.addEventListener("scroll", function() { tip.box.hidden = true; }, true);
+    }
+
     // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
     // redraw of a site panel can be hundreds)
     function observeBatched(el, opts, fn) {
@@ -959,7 +1037,7 @@
         ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
         ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
         ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
-        ["cards", "HOVER CARDS", true],
+        ["cards", "HOVER CARDS", true], ["watch", "AUCTION WATCH", true], ["chatplus", "CHAT+", true],
         ["notify", "NOTIFY", false]
     ];
     var features = loadSaved(FEATURES_KEY);
@@ -1690,6 +1768,70 @@
                     const out = document.getElementById("omhp-boss-data");
                     if (out) out.dataset.fail = [out.dataset.fail, "DAILY"].filter(Boolean).join(", ");
                 });
+            // AUCTION WATCH (see watch.js): the search you last ran in AUCTION, seen as the site asks
+            // for it, so [+ THIS SEARCH] can save it; and the watched searches, fetched (newest
+            // listings first) when the toolkit asks
+            if (${isOn("watch")}) Promise.all([
+                import(${JSON.stringify(base + "store.js" + v)}),
+                import(${JSON.stringify(base + "api.js" + v)})
+            ])
+                .then(([store, api]) => {
+                    const out = document.getElementById("omhp-boss-data");
+                    const ours = new Set(); // the watch's own requests, which aren't your searches
+                    // The query string getAuction builds from these filters
+                    const query = (f) => new URLSearchParams(Object.entries(f).filter(([, x]) => x !== undefined && x !== "")
+                        .map(([k, x]) => [k, String(x)])).toString();
+                    const realFetch = window.fetch;
+                    window.fetch = function(input) {
+                        try {
+                            const u = typeof input === "string" ? input : input?.url ?? "";
+                            const at = u.indexOf("/api/auction?");
+                            if (at !== -1) {
+                                const qs = u.slice(at + "/api/auction?".length);
+                                if (ours.has(qs)) ours.delete(qs);
+                                else {
+                                    const f = Object.fromEntries(new URLSearchParams(qs));
+                                    delete f.page;
+                                    delete f.sort;
+                                    out.dataset.aucQuery = JSON.stringify(f);
+                                }
+                            }
+                        } catch (e) { /* never get in the site's way */ }
+                        return realFetch.apply(window, arguments);
+                    };
+                    document.addEventListener("omhp-watch-poll", async (e) => {
+                        let list = [];
+                        try { list = JSON.parse(e.detail); } catch (err) { return; }
+                        for (const w of list) {
+                            const f = { ...w.f, sort: "new", page: 0 };
+                            const qs = query(f);
+                            ours.add(qs);
+                            try {
+                                const got = await api.getAuction(f);
+                                const listings = (got?.listings ?? []).map((l) => {
+                                    const item = store.itemById(l.item_id) ?? l.item ?? {};
+                                    return { id: l.id, price: l.price, count: l.count ?? 1, name: item.name ?? "?", rarity: item.rarity ?? "" };
+                                });
+                                document.dispatchEvent(new CustomEvent("omhp-watch-result", { detail: JSON.stringify({ id: w.id, listings }) }));
+                            } catch (err) {
+                                ours.delete(qs); // not logged in, or the site is busy: next round
+                            }
+                        }
+                    });
+                })
+                .catch(() => {
+                    const out = document.getElementById("omhp-boss-data");
+                    if (out) out.dataset.fail = [out.dataset.fail, "AUCTION WATCH"].filter(Boolean).join(", ");
+                });
+            // SOUNDS (see playSound): one of the site's own sounds, only while its [SND:ON]
+            import(${JSON.stringify(base + "sound.js" + v)})
+                .then((sound) => {
+                    const play = { boss: sound.relic, mention: sound.crit, watch: sound.loot };
+                    document.addEventListener("omhp-sound", (e) => {
+                        if (sound.isOn() && typeof play[e.detail] === "function") play[e.detail]();
+                    });
+                })
+                .catch(() => { /* no sounds, nothing else lost */ });
         `;
         var script = document.createElement("script");
         script.type = "module";
@@ -2731,9 +2873,7 @@
                 c.appendChild(v);
             }
             if (c.lastChild.textContent !== value) c.lastChild.textContent = value;
-            if (tip) {
-                if (c.title !== tip) c.title = tip;
-            } else if (c.hasAttribute("title")) c.removeAttribute("title");
+            setTip(c, tip);
             return c;
         }
 
@@ -3112,6 +3252,21 @@
         }
         paintLootMin();
         row("LOOT ALERT", [lootMin]);
+
+        // SOUNDS: the toolkit's alerts that play one of the site's sounds (only with its [SND:ON];
+        // it already has its own for loot, world events and full attacks)
+        var soundBtns = SOUND_NAMES.map(function(s) {
+            var b = choice(s[1], !!loadSaved(SOUNDS_KEY)[s[0]], "play a sound for this (only while the site's [SND:ON])", function() {
+                var all = loadSaved(SOUNDS_KEY);
+                all[s[0]] = !all[s[0]];
+                save(SOUNDS_KEY, all);
+                b.classList.toggle("on", all[s[0]]);
+                if (all[s[0]]) playSound(s[0]); // what it sounds like
+            });
+            b.classList.add("omhp-check");
+            return b;
+        });
+        row("SOUNDS", soundBtns);
         if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
 
         // Other userscripts this one knows, checked each time the menu opens
@@ -3255,6 +3410,9 @@
                 currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
                 themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === currentTheme); });
                 paintCustom();
+            }
+            if (key === SOUNDS_KEY) {
+                soundBtns.forEach(function(b, i) { b.classList.toggle("on", !!loadSaved(SOUNDS_KEY)[SOUND_NAMES[i][0]]); });
             }
             if (key === FEATURES_KEY) {
                 featBtns.forEach(function(b, i) {
@@ -3510,7 +3668,7 @@
             });
             summary.appendChild(chestsBtn);
             if (keys.length) summary.appendChild(reset);
-            summary.title = ratesTitle(st, hits);
+            setTip(summary, ratesTitle(st, hits));
         }
 
         function ratesTitle(st, hits) {
@@ -3659,8 +3817,8 @@
                 m.appendChild(g);
             }
             li.appendChild(m);
-            li.title = new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
-                (x.killed ? "" : "\n(you weren't watching when it ended)") + phaseLines(x.ph);
+            setTip(li, new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
+                (x.killed ? "" : "\n(you weren't watching when it ended)") + phaseLines(x.ph));
             return li;
         }
 
@@ -3773,7 +3931,18 @@
         btn.className = "btn-text omhp-pin";
         tabTools(tabs).appendChild(btn);
 
-        var pins = []; // { key, panel, home, slot, grip, keepShown }, top to bottom
+        var pins = []; // { key, panel, home, slot, grip, keepShown, fold }, top to bottom
+
+        // [_] folds a pinned panel down to its name (remembered by tab), so the others get its room
+        var PIN_FOLD_KEY = "omhp.layout.pinFold";
+        var folds = loadSaved(PIN_FOLD_KEY);
+
+        function paintFold(p) {
+            var on = !!folds[p.key];
+            p.slot.classList.toggle("folded", on);
+            p.fold.textContent = on ? "[+]" : "[_]";
+            p.fold.title = on ? "show " + p.key.toUpperCase() + " again" : "fold " + p.key.toUpperCase() + " down to its name";
+        }
 
         function selectedKey() {
             var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');
@@ -3854,7 +4023,23 @@
                 key: key, panel: panel, home: panel.nextSibling, slot: slot,
                 keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
             };
+            var fold = document.createElement("button");
+            fold.type = "button";
+            fold.className = "btn-text omhp-pin-x";
+            fold.addEventListener("click", function() {
+                if (folds[key]) delete folds[key];
+                else folds[key] = true;
+                save(PIN_FOLD_KEY, folds);
+                paintFold(p);
+            });
+            var name = document.createElement("div");
+            name.className = "omhp-pin-name";
+            var t = tabButton(key);
+            name.textContent = (t && (t.dataset.short || t.textContent.replace(/^\s*\[\s*|\s*\]\s*$/g, ""))) || key.toUpperCase();
+            p.fold = fold;
             slot.appendChild(x);
+            slot.appendChild(fold);
+            slot.appendChild(name);
             slot.appendChild(panel);
             p.grip = makeGrip(p);
             box.appendChild(slot);
@@ -3862,6 +4047,7 @@
             panel.hidden = false;
             p.keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
             setHeight(p, heights[key]);
+            paintFold(p);
             pins.push(p);
             save(PIN_KEY, pins.map(function(q) { return q.key; }));
             paint();
@@ -4346,6 +4532,224 @@
         check();
     }
 
+    // SOUNDS > NEW BOSS (MENTION is in chatPlus, AUCTION MATCH in auctionWatch)
+    function soundAlerts() {
+        var seq = null;
+        every(5000, function() {
+            var b = trueBoss();
+            if (!b) return;
+            if (seq !== null && b.seq !== seq && isLeader()) playSound("boss");
+            seq = b.seq;
+        });
+    }
+
+    // CHAT+: a line that mentions you sends a notification (in the background) and plays MENTION;
+    // Shift-click a name to start a reply ("@NAME "); hover a line's time for when it was sent.
+    function chatPlus() {
+        var list = document.getElementById("chat-list");
+        var input = document.getElementById("chat-input");
+        if (!list || !input) return false;
+
+        // The site redraws the whole list on each message, so lines are told apart by their id; the
+        // ones on screen when the page opened are old news
+        var seen = null;
+        function scan() {
+            var lines = list.querySelectorAll("li[data-id]");
+            if (seen === null) {
+                seen = {};
+                lines.forEach(function(li) { seen[li.dataset.id] = true; });
+                return;
+            }
+            lines.forEach(function(li) {
+                if (seen[li.dataset.id]) return;
+                seen[li.dataset.id] = true;
+                if (!li.classList.contains("mention-me") || li.classList.contains("me") || !isLeader()) return;
+                notify("Chat: " + ((li.querySelector(".chat-text") || li).textContent || "").trim().slice(0, 120));
+                playSound("mention");
+            });
+        }
+        setTimeout(function() {
+            scan();
+            observeBatched(list, { childList: true }, scan);
+        }, 3000);
+
+        // Shift-click a name: "@NAME " in the chat box (a plain click still opens their gear)
+        list.addEventListener("click", function(e) {
+            var who = e.shiftKey && e.target.closest ? e.target.closest(".who") : null;
+            if (!who || input.disabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var name = (who.textContent || "").replace(/[^A-Za-z0-9_]/g, "");
+            if (!name) return;
+            var at = "@" + name + " ";
+            if (input.value.indexOf(at) === -1) input.value += (input.value && !/\s$/.test(input.value) ? " " : "") + at;
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }, true);
+
+        // A line's time ("3m") as the date and time it was sent
+        document.addEventListener("mouseover", function(e) {
+            var t = e.target.closest ? e.target.closest("#chat-list .t[data-t], #feed .t[data-t]") : null;
+            if (!t || t.title) return;
+            var secs = Number(t.dataset.t);
+            if (secs) t.title = new Date(secs * 1000).toLocaleString();
+        });
+    }
+
+    // AUCTION WATCH: [+ THIS SEARCH] above the auction house saves the search you last ran there
+    // with a top price (up to five). The leader tab has the page script fetch each watched search,
+    // newest first, every minute (every 3 while the browser tab is in the background). A listing it
+    // hasn't seen before at or under the price is a match: a notification, a sound (SOUNDS), the
+    // AUCTION tab lit up until you look, and a line in the list until you [CLEAR] it.
+    var WATCH_KEY = "omhp.layout.watches";
+    var WATCH_SEEN_KEY = "omhp.layout.watchSeen"; // listing ids already seen, per watch
+    var WATCH_HITS_KEY = "omhp.layout.watchHits";
+    var MAX_WATCHES = 5;
+
+    function auctionWatch() {
+        var panel = document.getElementById("panel-auction");
+        var bridge = document.getElementById("omhp-boss-data");
+        if (!panel || !bridge) return false;
+        var bar = document.createElement("div");
+        bar.className = "omhp-watch";
+
+        // "SWORD · EPIC ≤ 1,200"
+        function label(f, max) {
+            var bits = [f.q, f.slot, f.rarity, f.effect, f.refined ? "REFINED" : "", f.unowned ? "NOT OWNED" : ""].filter(Boolean);
+            return (bits.join(" · ") || "ANYTHING").toUpperCase() + (max ? " ≤ " + fmt(max) : "");
+        }
+
+        // The search last run in AUCTION (the page script sees the site ask for it)
+        function lastSearch() {
+            try { return JSON.parse(bridge.dataset.aucQuery || "{}"); } catch (e) { return {}; }
+        }
+
+        function line(cls, text) {
+            var d = document.createElement("div");
+            d.className = cls;
+            if (text) d.textContent = text;
+            return d;
+        }
+
+        function paint() {
+            var watches = loadJSON(WATCH_KEY, []), hits = loadJSON(WATCH_HITS_KEY, []);
+            var head = line("omhp-watch-head", "WATCH ");
+            var add = resetButton("watch the search you last ran: new listings at or under your price are flagged", addWatch);
+            add.textContent = "[+ THIS SEARCH]";
+            add.disabled = watches.length >= MAX_WATCHES;
+            head.appendChild(add);
+            var rows = [head];
+            if (!watches.length) rows.push(line("omhp-watch-row dim", "search below, then + THIS SEARCH to hear about new listings"));
+            watches.forEach(function(w) {
+                var row = line("omhp-watch-row", label(w.f || {}, w.max));
+                var del = resetButton("stop watching this", function() {
+                    save(WATCH_KEY, loadJSON(WATCH_KEY, []).filter(function(x) { return x.id !== w.id; }));
+                    paint();
+                });
+                del.textContent = "×";
+                row.appendChild(del);
+                rows.push(row);
+            });
+            if (hits.length) {
+                var hh = line("omhp-watch-head", "NEW LISTINGS ");
+                var clear = resetButton("clear this list", function() {
+                    save(WATCH_HITS_KEY, []);
+                    paint();
+                });
+                clear.textContent = "[CLEAR]";
+                hh.appendChild(clear);
+                rows.push(hh);
+                hits.forEach(function(h) {
+                    var row = line("omhp-watch-row");
+                    var name = document.createElement("span");
+                    if (h.rarity) name.className = "r-" + h.rarity;
+                    name.textContent = h.name;
+                    row.appendChild(document.createTextNode(hhmm(h.t) + "  "));
+                    row.appendChild(name);
+                    row.appendChild(document.createTextNode((h.count > 1 ? " ×" + h.count : "") + " for " + fmt(h.price)));
+                    rows.push(row);
+                });
+            }
+            bar.replaceChildren.apply(bar, rows);
+        }
+
+        function addWatch() {
+            var f = lastSearch();
+            var max = Number(String(prompt("New listings of " + label(f) + " at or under what price?") || "").replace(/[^\d]/g, ""));
+            if (!max) return;
+            var watches = loadJSON(WATCH_KEY, []);
+            if (watches.length >= MAX_WATCHES) return;
+            // Not yet primed: the first look only notes what's listed already
+            watches.push({ id: Date.now().toString(36), f: f, max: max, primed: false });
+            save(WATCH_KEY, watches);
+            paint();
+            poll();
+        }
+
+        var lastPoll = 0;
+        function poll() {
+            var watches = loadJSON(WATCH_KEY, []);
+            if (!watches.length || !isLeader()) return;
+            lastPoll = Date.now();
+            document.dispatchEvent(new CustomEvent("omhp-watch-poll", {
+                detail: JSON.stringify(watches.map(function(w) { return { id: w.id, f: w.f }; }))
+            }));
+        }
+        every(15000, function() {
+            if (Date.now() - lastPoll >= (document.hidden ? 180000 : 60000) - 1000) poll();
+        });
+
+        // AUCTION lit up while there are matches you haven't looked at
+        function lit(on) {
+            var tab = tabButton("auction");
+            if (tab) tab.classList.toggle("omhp-watch-lit", on);
+        }
+
+        document.addEventListener("omhp-watch-result", function(e) {
+            var r;
+            try { r = JSON.parse(e.detail); } catch (err) { return; }
+            var watches = loadJSON(WATCH_KEY, []);
+            var w = watches.filter(function(x) { return x.id === r.id; })[0];
+            if (!w) return;
+            var seen = loadSaved(WATCH_SEEN_KEY), before = seen[w.id] || [];
+            var fresh = r.listings.filter(function(l) { return before.indexOf(l.id) === -1; });
+            if (w.primed) {
+                var found = fresh.filter(function(l) { return l.price <= w.max; });
+                if (found.length) {
+                    var hits = loadJSON(WATCH_HITS_KEY, []);
+                    found.forEach(function(l) { hits.unshift({ t: Date.now(), name: l.name, rarity: l.rarity, price: l.price, count: l.count }); });
+                    save(WATCH_HITS_KEY, hits.slice(0, 20));
+                    notify("Auction: " + found[0].name + " for " + fmt(found[0].price) + (found.length > 1 ? " (+" + (found.length - 1) + " more)" : ""));
+                    playSound("watch");
+                    lit(true);
+                    paint();
+                }
+            } else {
+                w.primed = true;
+                save(WATCH_KEY, watches);
+            }
+            seen[w.id] = before.concat(fresh.map(function(l) { return l.id; })).slice(-200);
+            Object.keys(seen).forEach(function(k) {
+                if (!watches.some(function(x) { return x.id === k; })) delete seen[k];
+            });
+            save(WATCH_SEEN_KEY, seen);
+        });
+
+        // The site redraws the panel from scratch, so the list goes back on top after each redraw;
+        // AUCTION on screen means you've seen the matches
+        function place() {
+            if (bar.parentNode !== panel || panel.firstChild !== bar) panel.insertBefore(bar, panel.firstChild);
+            if (!panel.hidden && panel.offsetParent) lit(false);
+        }
+        observeBatched(panel, { childList: true }, place);
+        observeBatched(panel, { attributes: true, attributeFilter: ["hidden"] }, place);
+        window.addEventListener("storage", function(e) {
+            if (e.key === WATCH_KEY || e.key === WATCH_HITS_KEY) paint();
+            if (e.key === WATCH_HITS_KEY && loadJSON(WATCH_HITS_KEY, []).length) lit(true);
+        });
+        paint();
+        place();
+    }
     // Alt + key shortcuts (the site's own keys use no modifier, and it ignores Alt):
     // Alt+1..9 picks a tab in the right column, Alt+P pins, Alt+O pops out, Alt+T opens
     // [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout.
@@ -4494,6 +4898,17 @@
         observeBatched(panel, { childList: true, subtree: true }, apply);
         apply();
     }
+
+    // SHOP: the site won't redraw SHOP while an input inside it has focus (so a half-typed BUY
+    // amount survives), and clicking an AUTO-SELL label focuses its hidden tick box, so the
+    // tick and the SURE? question never appeared. Let go of the tick box before the site
+    // handles the change (a capture listener on the document runs before the box's own).
+    function shopTicks() {
+        document.addEventListener("change", function(e) {
+            var box = e.target;
+            if (box instanceof HTMLInputElement && box.type === "checkbox" && box.closest("#panel-shop")) box.blur();
+        }, true);
+    }
     // Features that couldn't start (the site changed) and page-script imports that failed,
     // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
     var broken = [];
@@ -4559,6 +4974,7 @@
         }
 
         pinMain();
+        hoverTips();
         paintAccount(); // always: it also publishes the boss data (see trueBoss)
         run("graph", bossGraph);
         run("eta", bossEta);
@@ -4573,7 +4989,11 @@
         run("keys", shortcuts);
         run("filters", lineFilters);
         run("boxorder", bagBoxOrder);
+        run("watch", auctionWatch);
+        run("chatplus", chatPlus);
+        soundAlerts();
         clanFold();
+        shopTicks();
         pinPanel();
         floatingPanels();
         run("loot", lootLog);

@@ -21,7 +21,7 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - Drag the gaps between columns to resize them. Double-click any drag handle to reset it.
 - The boss column and the right column stay pinned in view while you scroll.
 - A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
-- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]** and a line under it you can drag to resize it. **[POP OUT]** opens the open panel in a floating window. Both sit at the right of the tab bar's first line.
+- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]**, a line under it you can drag to resize it, and **[_]** to fold it down to its name (remembered) so the others get its room. **[POP OUT]** opens the open panel in a floating window. Both sit at the right of the tab bar's first line.
 - BAG's loot-box cards are smaller, so more fit across the right column, and they're in the same order as SHOP (**BOX ORDER** in FEATURES).
 - CLAN's MEMBERS list folds away with **[-]** / **[+]** on its heading, and stays folded until you open it again.
 - RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
@@ -47,17 +47,20 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 - **Alt+1…9** picks a tab in the right column, **Alt+P** pins or unpins, **Alt+O** pops it out and **Alt+T** opens [TOOLKIT]. The site's own keys (attack, U, S, 1–3) are untouched.
 - **FILTER** on the ATTACKS and CHAT headers: hide lines with any of some words or names, and highlight lines with others (your name, your clan…).
 - **COMPACT** (off by default, in FEATURES): tighter lines and spacing everywhere.
+- **AUCTION WATCH**: above the auction house, **[+ THIS SEARCH]** saves the search you last ran there with a top price (up to five watches). Every minute (every 3 while the tab is in the background) the toolkit checks each one for new listings, and one at or under your price shows in the list there, lights up the AUCTION tab and sends a notification. **×** stops a watch, **[CLEAR]** empties the list.
+- **CHAT+**: Shift-click a name in CHAT to put `@NAME` in the chat box (a plain click still opens their gear), and hover a message's time to see the date and time it was sent.
 - **HOVER CARDS**: pause over a player's name in ATTACKS or CHAT to see their place on this boss's board (it lists the top 10) and their damage in the last 5 minutes.
 - **STATS THEME**: if Zephy's [1MHP Data Statistics](https://gist.github.com/Zephy-fm/7eab1928aee90a961d28b206a4acccd1) userscript is installed, its panel takes on the toolkit's theme, highlight colour and the site's rarity colours. [TOOLKIT] → ADD-ONS shows whether it was found.
 
 ### Alerts
 - The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG 1:42]` during FOG. A running world event adds its name and time left: `[72% ~39m · MERCHANT 1:42]`.
-- **NOTIFY** (off until you turn it on in FEATURES): desktop notifications while the tab is in the background, for full attacks, a boss going down or a new one arriving, FOG starting or ending, new messages, and loot from a rarity you pick (**LOOT ALERT** in [TOOLKIT], LEGENDARY or better by default).
+- **NOTIFY** (off until you turn it on in FEATURES): desktop notifications while the tab is in the background, for full attacks, a boss going down or a new one arriving, FOG starting or ending, new messages, chat lines that mention you, AUCTION WATCH matches, and loot from a rarity you pick (**LOOT ALERT** in [TOOLKIT], LEGENDARY or better by default).
+- **SOUNDS** in [TOOLKIT]: play one of the site's own sounds for a new boss, a chat line that mentions you, or an auction match. They only play while the site's own sound is on ([SND:ON]); the site already has its own for loot, world events and full attacks.
 
 ### Top bar
 - **[TOOLKIT]**: the toolkit's settings menu.
   - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), or **CUSTOM** with a colour picker for each of the theme's colours. **SHARE** copies your custom theme (and highlight colour) as a code such as `OMHP1-0b1020-121a30-dfe6f5-7f8aa6-2c3550-ffb000`, and **USE CODE** applies one.
-  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order, hover cards or notifications on or off. Changes apply after a reload.
+  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order, hover cards, auction watch, chat+ or notifications on or off. Changes apply after a reload.
   - **LOOT ALERT**: the lowest rarity that gets a notification.
   - **KEYS**: a reminder of the Alt shortcuts.
   - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).

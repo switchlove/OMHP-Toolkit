@@ -187,6 +187,21 @@ function toolkitMenu() {
     }
     paintLootMin();
     row("LOOT ALERT", [lootMin]);
+
+    // SOUNDS: the toolkit's alerts that play one of the site's sounds (only with its [SND:ON];
+    // it already has its own for loot, world events and full attacks)
+    var soundBtns = SOUND_NAMES.map(function(s) {
+        var b = choice(s[1], !!loadSaved(SOUNDS_KEY)[s[0]], "play a sound for this (only while the site's [SND:ON])", function() {
+            var all = loadSaved(SOUNDS_KEY);
+            all[s[0]] = !all[s[0]];
+            save(SOUNDS_KEY, all);
+            b.classList.toggle("on", all[s[0]]);
+            if (all[s[0]]) playSound(s[0]); // what it sounds like
+        });
+        b.classList.add("omhp-check");
+        return b;
+    });
+    row("SOUNDS", soundBtns);
     if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
 
     // Other userscripts this one knows, checked each time the menu opens
@@ -330,6 +345,9 @@ function toolkitMenu() {
             currentTheme = loadJSON(THEME_KEY, null) || THEMES[0].name;
             themeBtns.forEach(function(x) { x.classList.toggle("on", x.textContent === currentTheme); });
             paintCustom();
+        }
+        if (key === SOUNDS_KEY) {
+            soundBtns.forEach(function(b, i) { b.classList.toggle("on", !!loadSaved(SOUNDS_KEY)[SOUND_NAMES[i][0]]); });
         }
         if (key === FEATURES_KEY) {
             featBtns.forEach(function(b, i) {

@@ -56,3 +56,67 @@ function notifier() {
     check();
 }
 
+// SOUNDS > NEW BOSS (MENTION is in chatPlus, AUCTION MATCH in auctionWatch)
+function soundAlerts() {
+    var seq = null;
+    every(5000, function() {
+        var b = trueBoss();
+        if (!b) return;
+        if (seq !== null && b.seq !== seq && isLeader()) playSound("boss");
+        seq = b.seq;
+    });
+}
+
+// CHAT+: a line that mentions you sends a notification (in the background) and plays MENTION;
+// Shift-click a name to start a reply ("@NAME "); hover a line's time for when it was sent.
+function chatPlus() {
+    var list = document.getElementById("chat-list");
+    var input = document.getElementById("chat-input");
+    if (!list || !input) return false;
+
+    // The site redraws the whole list on each message, so lines are told apart by their id; the
+    // ones on screen when the page opened are old news
+    var seen = null;
+    function scan() {
+        var lines = list.querySelectorAll("li[data-id]");
+        if (seen === null) {
+            seen = {};
+            lines.forEach(function(li) { seen[li.dataset.id] = true; });
+            return;
+        }
+        lines.forEach(function(li) {
+            if (seen[li.dataset.id]) return;
+            seen[li.dataset.id] = true;
+            if (!li.classList.contains("mention-me") || li.classList.contains("me") || !isLeader()) return;
+            notify("Chat: " + ((li.querySelector(".chat-text") || li).textContent || "").trim().slice(0, 120));
+            playSound("mention");
+        });
+    }
+    setTimeout(function() {
+        scan();
+        observeBatched(list, { childList: true }, scan);
+    }, 3000);
+
+    // Shift-click a name: "@NAME " in the chat box (a plain click still opens their gear)
+    list.addEventListener("click", function(e) {
+        var who = e.shiftKey && e.target.closest ? e.target.closest(".who") : null;
+        if (!who || input.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var name = (who.textContent || "").replace(/[^A-Za-z0-9_]/g, "");
+        if (!name) return;
+        var at = "@" + name + " ";
+        if (input.value.indexOf(at) === -1) input.value += (input.value && !/\s$/.test(input.value) ? " " : "") + at;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+    }, true);
+
+    // A line's time ("3m") as the date and time it was sent
+    document.addEventListener("mouseover", function(e) {
+        var t = e.target.closest ? e.target.closest("#chat-list .t[data-t], #feed .t[data-t]") : null;
+        if (!t || t.title) return;
+        var secs = Number(t.dataset.t);
+        if (secs) t.title = new Date(secs * 1000).toLocaleString();
+    });
+}
+

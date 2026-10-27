@@ -31,7 +31,18 @@ function pinPanel() {
     btn.className = "btn-text omhp-pin";
     tabTools(tabs).appendChild(btn);
 
-    var pins = []; // { key, panel, home, slot, grip, keepShown }, top to bottom
+    var pins = []; // { key, panel, home, slot, grip, keepShown, fold }, top to bottom
+
+    // [_] folds a pinned panel down to its name (remembered by tab), so the others get its room
+    var PIN_FOLD_KEY = "omhp.layout.pinFold";
+    var folds = loadSaved(PIN_FOLD_KEY);
+
+    function paintFold(p) {
+        var on = !!folds[p.key];
+        p.slot.classList.toggle("folded", on);
+        p.fold.textContent = on ? "[+]" : "[_]";
+        p.fold.title = on ? "show " + p.key.toUpperCase() + " again" : "fold " + p.key.toUpperCase() + " down to its name";
+    }
 
     function selectedKey() {
         var sel = document.querySelector('#tabs [role=tab][aria-selected="true"]');
@@ -112,7 +123,23 @@ function pinPanel() {
             key: key, panel: panel, home: panel.nextSibling, slot: slot,
             keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
         };
+        var fold = document.createElement("button");
+        fold.type = "button";
+        fold.className = "btn-text omhp-pin-x";
+        fold.addEventListener("click", function() {
+            if (folds[key]) delete folds[key];
+            else folds[key] = true;
+            save(PIN_FOLD_KEY, folds);
+            paintFold(p);
+        });
+        var name = document.createElement("div");
+        name.className = "omhp-pin-name";
+        var t = tabButton(key);
+        name.textContent = (t && (t.dataset.short || t.textContent.replace(/^\s*\[\s*|\s*\]\s*$/g, ""))) || key.toUpperCase();
+        p.fold = fold;
         slot.appendChild(x);
+        slot.appendChild(fold);
+        slot.appendChild(name);
         slot.appendChild(panel);
         p.grip = makeGrip(p);
         box.appendChild(slot);
@@ -120,6 +147,7 @@ function pinPanel() {
         panel.hidden = false;
         p.keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
         setHeight(p, heights[key]);
+        paintFold(p);
         pins.push(p);
         save(PIN_KEY, pins.map(function(q) { return q.key; }));
         paint();

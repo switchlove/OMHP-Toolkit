@@ -60,3 +60,14 @@ function clanFold() {
     observeBatched(panel, { childList: true, subtree: true }, apply);
     apply();
 }
+
+// SHOP: the site won't redraw SHOP while an input inside it has focus (so a half-typed BUY
+// amount survives), and clicking an AUTO-SELL label focuses its hidden tick box, so the
+// tick and the SURE? question never appeared. Let go of the tick box before the site
+// handles the change (a capture listener on the document runs before the box's own).
+function shopTicks() {
+    document.addEventListener("change", function(e) {
+        var box = e.target;
+        if (box instanceof HTMLInputElement && box.type === "checkbox" && box.closest("#panel-shop")) box.blur();
+    }, true);
+}

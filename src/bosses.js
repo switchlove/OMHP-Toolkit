@@ -40,8 +40,8 @@ function bossLog() {
             m.appendChild(g);
         }
         li.appendChild(m);
-        li.title = new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
-            (x.killed ? "" : "\n(you weren't watching when it ended)") + phaseLines(x.ph);
+        setTip(li, new Date(x.start).toLocaleString() + " to " + new Date(x.end).toLocaleString() +
+            (x.killed ? "" : "\n(you weren't watching when it ended)") + phaseLines(x.ph));
         return li;
     }
 

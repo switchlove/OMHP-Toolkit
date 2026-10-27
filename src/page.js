@@ -288,6 +288,70 @@ function paintAccount() {
                 const out = document.getElementById("omhp-boss-data");
                 if (out) out.dataset.fail = [out.dataset.fail, "DAILY"].filter(Boolean).join(", ");
             });
+        // AUCTION WATCH (see watch.js): the search you last ran in AUCTION, seen as the site asks
+        // for it, so [+ THIS SEARCH] can save it; and the watched searches, fetched (newest
+        // listings first) when the toolkit asks
+        if (${isOn("watch")}) Promise.all([
+            import(${JSON.stringify(base + "store.js" + v)}),
+            import(${JSON.stringify(base + "api.js" + v)})
+        ])
+            .then(([store, api]) => {
+                const out = document.getElementById("omhp-boss-data");
+                const ours = new Set(); // the watch's own requests, which aren't your searches
+                // The query string getAuction builds from these filters
+                const query = (f) => new URLSearchParams(Object.entries(f).filter(([, x]) => x !== undefined && x !== "")
+                    .map(([k, x]) => [k, String(x)])).toString();
+                const realFetch = window.fetch;
+                window.fetch = function(input) {
+                    try {
+                        const u = typeof input === "string" ? input : input?.url ?? "";
+                        const at = u.indexOf("/api/auction?");
+                        if (at !== -1) {
+                            const qs = u.slice(at + "/api/auction?".length);
+                            if (ours.has(qs)) ours.delete(qs);
+                            else {
+                                const f = Object.fromEntries(new URLSearchParams(qs));
+                                delete f.page;
+                                delete f.sort;
+                                out.dataset.aucQuery = JSON.stringify(f);
+                            }
+                        }
+                    } catch (e) { /* never get in the site's way */ }
+                    return realFetch.apply(window, arguments);
+                };
+                document.addEventListener("omhp-watch-poll", async (e) => {
+                    let list = [];
+                    try { list = JSON.parse(e.detail); } catch (err) { return; }
+                    for (const w of list) {
+                        const f = { ...w.f, sort: "new", page: 0 };
+                        const qs = query(f);
+                        ours.add(qs);
+                        try {
+                            const got = await api.getAuction(f);
+                            const listings = (got?.listings ?? []).map((l) => {
+                                const item = store.itemById(l.item_id) ?? l.item ?? {};
+                                return { id: l.id, price: l.price, count: l.count ?? 1, name: item.name ?? "?", rarity: item.rarity ?? "" };
+                            });
+                            document.dispatchEvent(new CustomEvent("omhp-watch-result", { detail: JSON.stringify({ id: w.id, listings }) }));
+                        } catch (err) {
+                            ours.delete(qs); // not logged in, or the site is busy: next round
+                        }
+                    }
+                });
+            })
+            .catch(() => {
+                const out = document.getElementById("omhp-boss-data");
+                if (out) out.dataset.fail = [out.dataset.fail, "AUCTION WATCH"].filter(Boolean).join(", ");
+            });
+        // SOUNDS (see playSound): one of the site's own sounds, only while its [SND:ON]
+        import(${JSON.stringify(base + "sound.js" + v)})
+            .then((sound) => {
+                const play = { boss: sound.relic, mention: sound.crit, watch: sound.loot };
+                document.addEventListener("omhp-sound", (e) => {
+                    if (sound.isOn() && typeof play[e.detail] === "function") play[e.detail]();
+                });
+            })
+            .catch(() => { /* no sounds, nothing else lost */ });
     `;
     var script = document.createElement("script");
     script.type = "module";

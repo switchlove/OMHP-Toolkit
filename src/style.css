@@ -103,7 +103,7 @@ html.omhp-flattabs #tabs .tab-subcat { display: none; }
 html.omhp-flattabs #tabs .tab-submenu, html.omhp-flattabs #tabs .tab-submenu[hidden] { display: contents !important; }
 /* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
 html.omhp-flattabs #tabs { position: relative; }
-html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; white-space: nowrap; }
+html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; z-index: 31; white-space: nowrap; }
 html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
 
 /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
@@ -202,7 +202,14 @@ html.omhp-compact .left-toggle { padding: 0 0 3px; }
     font-size: 12px; text-align: left;
 }
 .omhp-sess-cell { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px dotted var(--faint); }
-.omhp-sess-cell[title] { cursor: help; }
+.omhp-sess-cell[data-omhp-tip] { cursor: help; }
+/* The toolkit's own tooltips (see setTip) */
+.omhp-tip {
+    position: fixed; z-index: 130; max-width: 360px; padding: 4px 8px; pointer-events: none; white-space: pre-line;
+    background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+    font-size: 11px; line-height: 1.45; color: var(--fg); letter-spacing: .03em; text-align: left;
+}
+.omhp-tip[hidden] { display: none; }
 .omhp-sess-cell .k { color: var(--dim); font-size: 11px; letter-spacing: .1em; }
 .omhp-sess-cell .v { color: var(--fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .omhp-sess-tools { margin-top: 6px; text-align: right; }
@@ -297,6 +304,18 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
     background: var(--bg); padding: 0 2px;
 }
 .omhp-pin-x:hover { color: var(--fg); }
+/* A folded pin: just its name, and no resize line */
+.omhp-pin-name { display: none; font-size: 11px; color: var(--dim); letter-spacing: .12em; }
+.omhp-pin-slot.folded { height: auto !important; min-height: 0; max-height: none; overflow: hidden; padding-bottom: 2px; }
+.omhp-pin-slot.folded > .panel { display: none !important; }
+.omhp-pin-slot.folded > .omhp-pin-name { display: block; }
+.omhp-pin-slot.folded + .omhp-pin-grip { display: none; }
+/* AUCTION WATCH: the watches and new matches above the auction house, and the lit-up tab */
+.omhp-watch { margin: 0 0 8px; padding: 0 0 6px; border-bottom: 1px dashed var(--faint); font-size: 11px; text-align: left; }
+.omhp-watch-head { color: var(--dim); letter-spacing: .12em; margin-top: 2px; }
+.omhp-watch-row { padding-left: 1ch; color: var(--fg); }
+.omhp-watch-row.dim { color: var(--dim); }
+#tabs [role=tab].omhp-watch-lit:not([aria-selected="true"]) { color: var(--amber); text-decoration: underline; }
 .omhp-pin-grip { flex: none; margin: -4px 0 4px; }
 #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
 
