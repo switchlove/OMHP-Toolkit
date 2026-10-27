@@ -15,69 +15,20 @@ Tampermonkey checks this repo for updates on its own when the `@version` number 
 
 ## Features
 
-### Layout
-- Three columns: feed/chat/messages | boss | side panels. Under 1300px wide, the left column moves below everything else.
-- Left column with ATTACKS, CHAT, MESSAGES, LOOT and BOSSES sections. Each one collapses, moves up or down, pops out, and resizes by dragging its bottom edge.
-- Drag the gaps between columns to resize them. Double-click any drag handle to reset it.
-- The boss column and the right column stay pinned in view while you scroll.
-- A flat tab bar in the right column: every unlocked tab is a button, with short labels and no dropdowns.
-- **[PIN]** keeps the open panel above the others. Pin up to three, stacked, each with its own **[UNPIN]**, a line under it you can drag to resize it, and **[_]** to fold it down to its name (remembered) so the others get its room. **[POP OUT]** opens the open panel in a floating window. Both sit at the right of the tab bar's first line.
-- BAG's loot-box cards are smaller, so more fit across the right column, and they're in the same order as SHOP (**BOX ORDER** in FEATURES).
-- CLAN's MEMBERS list folds away with **[-]** / **[+]** on its heading, and stays folded until you open it again.
-- RANKS (every 30 seconds) and HISTORY (every minute) reload while they're on screen (open, pinned or popped out), instead of only when you open the tab.
-- Floating windows can be dragged, resized, minimised and faded, and several can be open at once. They snap to the screen's edges and to each other while you drag (hold Shift to place one freely), and **TILE** (in [TOOLKIT] → LAYOUT) lays them all out in a grid.
-- Hides clutter: the duplicate MESSAGES heading, the key hints and the footer (the site's error line stays).
+The full guide to every feature is in the **[wiki](https://github.com/switchlove/OMHP-Toolkit/wiki)**. In short:
 
-### Boss
-- An ASCII HP graph next to the boss art covering the boss's whole life since you first saw it, kept across reloads. It marks heals, phase changes, players online (`*`) and your own damage (`+`), with a scale on the right for those two, and hovering shows the values for that moment. Phase changes are drawn on top of everything but the HP line, and FOG periods are shaded with `~`. Click an entry in the legend under it to hide or show that part (fill, heals, phases, online, your damage, fog). **[ALL] [1H] [15M]** zoom in on the recent part of a long fight, and **[REPLAY]** plays the boss's history back from the start over 10 seconds.
-- World events (MERCHANT, STASH, HUNT...) run along the graph's bottom row as `=` marks starting with the event's first letter; hover one for its name. While an event is running, its name and time left lead the ETA line and the tab title.
-- On the right of the live graph, a faint `:` line runs from the HP now down to 0 at the estimated kill (up to half the width; a kill further off ends the line with `>` at the edge, and the axis says how long). **[VS LAST]** draws the previous boss's fight faintly over this one, lined up from its start, to see if this one is going faster.
-- HP/min, everyone's DMG/min, HP healed and an estimated kill time from the last 5 minutes, with a range from what the last 1 and 15 minutes say, e.g. `DOWN IN ~39m (31–52m)`.
-- **BOSSES**: a log of every boss you've seen (the last 100): how long it lasted while you watched, whether you saw it die, your damage and share, the most players online and HP healed, which world events it had, and (on hover) your damage per phase. **[GRAPH]** opens a boss's HP graph in a window you can move, resize, zoom and replay (kept for the last 20 bosses).
-- During the FOG event it uses the site's real data and never records the fake HP.
+- **[Layout](https://github.com/switchlove/OMHP-Toolkit/wiki/Layout)**: three resizable columns, with ATTACKS, CHAT, MESSAGES, LOOT and BOSSES on the left. Pin up to three right-hand panels, or pop any panel out into a floating window that snaps and tiles.
+- **[Boss](https://github.com/switchlove/OMHP-Toolkit/wiki/Boss)**: an ASCII HP graph covering the boss's whole life, with heals, phases, FOG, world events, players online, your damage, zoom, replay and a comparison with the last boss. A kill estimate with a range, and a log of every boss you've seen.
+- **[Fight](https://github.com/switchlove/OMHP-Toolkit/wiki/Fight)**: your share of the damage, today's SESSION stats with the last 14 days and your all-time records, FULL IN and IDLE timers, and a LOOT log with drop rates and chest odds.
+- **[Shortcuts and filters](https://github.com/switchlove/OMHP-Toolkit/wiki/Shortcuts-and-Filters)**: Alt shortcuts, hide or highlight lines in ATTACKS and CHAT, AUCTION WATCH, chat replies, player hover cards and a compact mode.
+- **[Alerts](https://github.com/switchlove/OMHP-Toolkit/wiki/Alerts)**: the boss's HP and kill estimate in the tab title, desktop notifications and sounds.
+- **[Toolkit menu](https://github.com/switchlove/OMHP-Toolkit/wiki/Toolkit-Menu)**: colours and themes (shareable as a code), features on and off, saved layouts, backups, storage and a debug report. The top bar also gets a clock and the next DAILY reward.
 
-### Fight
-- **YOUR SHARE**: your percentage of all the damage on this boss.
-- **SESSION**, in its own box under FIGHT: your damage today, damage per hour (counting only the time the game was open), attacks, best and average hit, crit rate, shards earned and spent, shards per hour, and time played. It carries over when you reload and starts again at midnight or when you click **[RESET]**. **[DAYS]** shows your last 14 days: damage, damage per hour, hits, crit rate, idle time, shards and loot. Hover AVG HIT for the spread of your last 200 hits (smallest, median, 9 in 10, biggest). **THIS BOSS** shows your damage on the current boss, split by phase on hover.
-- **[RECORDS]** in SESSION: your biggest hit, best day, best share of a boss, rarest drop and how many days in a row you've played. Breaking one flashes it in SESSION with NEW RECORD.
-- **FULL IN**: time until every attack slot has refilled. **IDLE** adds up how long today your attacks sat full, recharging nothing.
-- **LOOT**: what you found today, counted by rarity, with drops per 100 attacks (hover for the last 30 days). Like SESSION, it carries over when you reload and has its own **[RESET]**. **[CHESTS]** shows what your box openings gave, per box, next to the site's stated odds (from single opens; OPEN ALL only reports how many were opened).
-
-### Shortcuts and filters
-- **Alt+1…9** picks a tab in the right column, **Alt+P** pins or unpins, **Alt+O** pops it out and **Alt+T** opens [TOOLKIT]. The site's own keys (attack, U, S, 1–3) are untouched.
-- **FILTER** on the ATTACKS and CHAT headers: hide lines with any of some words or names, and highlight lines with others (your name, your clan…).
-- **COMPACT** (off by default, in FEATURES): tighter lines and spacing everywhere.
-- **AUCTION WATCH**: above the auction house, **[+ THIS SEARCH]** saves the search you last ran there with a top price (up to five watches). Every minute (every 3 while the tab is in the background) the toolkit checks each one for new listings, and one at or under your price shows in the list there, lights up the AUCTION tab and sends a notification. **×** stops a watch, **[CLEAR]** empties the list.
-- **CHAT+**: Shift-click a name in CHAT to put `@NAME` in the chat box (a plain click still opens their gear), and hover a message's time to see the date and time it was sent.
-- **HOVER CARDS**: pause over a player's name in ATTACKS or CHAT to see their place on this boss's board (it lists the top 10) and their damage in the last 5 minutes.
-- **STATS THEME**: if Zephy's [1MHP Data Statistics](https://gist.github.com/Zephy-fm/7eab1928aee90a961d28b206a4acccd1) userscript is installed, its panel takes on the toolkit's theme, highlight colour and the site's rarity colours. [TOOLKIT] → ADD-ONS shows whether it was found.
-
-### Alerts
-- The browser tab's title shows the boss's HP and kill estimate after the site's attack count, e.g. `(3/5) [72% ~39m] ONE MILLION HP`, or `[FOG 1:42]` during FOG. A running world event adds its name and time left: `[72% ~39m · MERCHANT 1:42]`.
-- **NOTIFY** (off until you turn it on in FEATURES): desktop notifications while the tab is in the background, for full attacks, a boss going down or a new one arriving, FOG starting or ending, new messages, chat lines that mention you, AUCTION WATCH matches, and loot from a rarity you pick (**LOOT ALERT** in [TOOLKIT], LEGENDARY or better by default).
-- **SOUNDS** in [TOOLKIT]: play one of the site's own sounds for a new boss, a chat line that mentions you, or an auction match. They only play while the site's own sound is on ([SND:ON]); the site already has its own for loot, world events and full attacks.
-
-### Top bar
-- **[TOOLKIT]**: the toolkit's settings menu.
-  - **COLOUR** and **THEME**: a highlight colour, plus full themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER), or **CUSTOM** with a colour picker for each of the theme's colours. **SHARE** copies your custom theme (and highlight colour) as a code such as `OMHP1-0b1020-121a30-dfe6f5-7f8aa6-2c3550-ffb000`, and **USE CODE** applies one.
-  - **FEATURES**: switch any of the HP graph, ETA, share, session, FULL IN, loot, clock, flat tabs, account name, tab title, boss log, shortcuts, filters, compact mode, the stats theme, box order, hover cards, auction watch, chat+ or notifications on or off. Changes apply after a reload.
-  - **LOOT ALERT**: the lowest rarity that gets a notification.
-  - **KEYS**: a reminder of the Alt shortcuts.
-  - **ADD-ONS**: other userscripts it found and themed (see STATS THEME).
-  - **LAYOUT**: switch between layouts. **DEFAULT** puts everything back to how it started, **BOSS FOCUS** collapses the left column, **TILE** arranges the open pop-out windows, and **+ SAVE** stores your current layout (column sizes, section order and heights, pins and pop-out windows) under a name.
-  - **BACKUP**: **EXPORT** downloads all your toolkit settings, layouts and stats as a file; **IMPORT** loads one, for example in another browser.
-  - **STORAGE**: how much the toolkit keeps in your browser. **CLEAN UP** keeps only the last 5 boss graphs and 50 loot lines. If the browser's storage ever fills up, the toolkit does this by itself and shows **STORAGE FULL** in the ⚠ warning if that still isn't enough.
-  - **HELP**: **COPY DEBUG** copies the toolkit's version, the site's version, your browser, which features are off and what couldn't start, to paste into a bug report. It has no stats or names in it.
-  - Colours, themes, filters and graph settings changed in one tab apply in your other open tabs straight away.
-- A warning such as **⚠ 2 OFF** appears if parts of the toolkit couldn't start, for example after a site update. Hover it to see which parts.
-- Local time, how long the page has been open, and how long until the next **DAILY** reward, or **DAILY READY** while today's is waiting (with NOTIFY on, you get one reminder a day after it's waited 30 minutes).
-- The account button shows your badges and name.
-
-Your layout, sizes, order, colours, feature choices, HP history, session and loot are saved in your browser's localStorage. With the game open in more than one tab, one tab records the HP history and loot and the others show what it saves, so nothing is counted twice.
+Everything it keeps stays in your browser; see [Saved Data](https://github.com/switchlove/OMHP-Toolkit/wiki/Saved-Data). Something not working? See [Troubleshooting](https://github.com/switchlove/OMHP-Toolkit/wiki/Troubleshooting).
 
 ## Notes
 
-This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are the ones the site makes itself when you open RANKS or HISTORY, repeated while those panels are on screen. Everything it keeps stays in your browser.
+This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are ones the site makes itself: RANKS and HISTORY while they're on screen, the boss's board for HOVER CARDS, the DAILY timer and the searches you watch with AUCTION WATCH. Everything it keeps stays in your browser.
 
 ## Development
 
@@ -98,7 +49,7 @@ npm run check    # is the built script up to date, and does it parse?
 ## Releasing
 
 1. Raise `@version` in `src/header.js`, then `npm run build`. Tampermonkey only updates installs when this number goes up, and CI fails any change to the script that doesn't raise it.
-2. Update the README (and the feature notes in `src/header.js`) for anything new.
+2. Update the [wiki](https://github.com/switchlove/OMHP-Toolkit/wiki) (and the feature notes in `src/header.js`, and the README's short feature list if needed) for anything new.
 3. Run `npm test` and `npm run lint`.
 4. Commit and push to `main`. CI checks that the built script matches `src/`, its syntax, the tests and lint, and the release workflow creates a `vX.Y` GitHub release with the script attached. No manual tagging is needed.
 
