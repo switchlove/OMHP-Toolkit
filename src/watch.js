@@ -17,7 +17,8 @@ function auctionWatch() {
 
     // "SWORD · EPIC ≤ 1,200"
     function label(f, max) {
-        var bits = [f.q, f.slot, f.rarity, f.effect, f.refined ? "REFINED" : "", f.unowned ? "NOT OWNED" : ""].filter(Boolean);
+        var bits = [f.q, f.slot, f.rarity, f.effect, f.refined ? "REFINED" : "", f.unowned ? "NOT OWNED" : "",
+            f.seller ? "BY " + f.seller : ""].filter(Boolean);
         return (bits.join(" · ") || "ANYTHING").toUpperCase() + (max ? " ≤ " + fmt(max) : "");
     }
 

@@ -30,7 +30,6 @@ function moveSections() {
     run("chatplus", chatPlus);
     soundAlerts();
     clanFold();
-    shopTicks();
     pinPanel();
     floatingPanels();
     run("loot", lootLog);

@@ -6,7 +6,7 @@ function shortTabs() {
     var SHORT = [
         ["AUCTION HOUSE", "AUCTION"], ["ACHIEVEMENTS", "ACHIEVE"], ["THE FORGE", "FORGE"],
         ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"],
-        ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"]
+        ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"]
     ];
 
     function label(btn) {

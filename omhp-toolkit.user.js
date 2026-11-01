@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.32
+// @version      0.33
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -4405,7 +4405,7 @@
         var SHORT = [
             ["AUCTION HOUSE", "AUCTION"], ["ACHIEVEMENTS", "ACHIEVE"], ["THE FORGE", "FORGE"],
             ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"],
-            ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"]
+            ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"]
         ];
 
         function label(btn) {
@@ -4618,7 +4618,8 @@
 
         // "SWORD · EPIC ≤ 1,200"
         function label(f, max) {
-            var bits = [f.q, f.slot, f.rarity, f.effect, f.refined ? "REFINED" : "", f.unowned ? "NOT OWNED" : ""].filter(Boolean);
+            var bits = [f.q, f.slot, f.rarity, f.effect, f.refined ? "REFINED" : "", f.unowned ? "NOT OWNED" : "",
+                f.seller ? "BY " + f.seller : ""].filter(Boolean);
             return (bits.join(" · ") || "ANYTHING").toUpperCase() + (max ? " ≤ " + fmt(max) : "");
         }
 
@@ -4901,17 +4902,6 @@
         observeBatched(panel, { childList: true, subtree: true }, apply);
         apply();
     }
-
-    // SHOP: the site won't redraw SHOP while an input inside it has focus (so a half-typed BUY
-    // amount survives), and clicking an AUTO-SELL label focuses its hidden tick box, so the
-    // tick and the SURE? question never appeared. Let go of the tick box before the site
-    // handles the change (a capture listener on the document runs before the box's own).
-    function shopTicks() {
-        document.addEventListener("change", function(e) {
-            var box = e.target;
-            if (box instanceof HTMLInputElement && box.type === "checkbox" && box.closest("#panel-shop")) box.blur();
-        }, true);
-    }
     // Features that couldn't start (the site changed) and page-script imports that failed,
     // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
     var broken = [];
@@ -4996,7 +4986,6 @@
         run("chatplus", chatPlus);
         soundAlerts();
         clanFold();
-        shopTicks();
         pinPanel();
         floatingPanels();
         run("loot", lootLog);
