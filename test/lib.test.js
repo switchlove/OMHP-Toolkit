@@ -119,6 +119,13 @@ test("outcomeKey and outcomeLabel", () => {
     assert.equal(lib.outcomeLabel("next_crit:2"), "2 CRIT CHARGES");
 });
 
+test("mergeOdds", () => {
+    same(lib.mergeOdds([]), []);
+    same(lib.mergeOdds([["attacks:1", 0.5], ["rare", 0.5]]), [["attacks:1", 0.5], ["rare", 0.5]]);
+    // The SCROLL BOX: one stated row per scroll, all keyed the same
+    same(lib.mergeOdds([["scroll:1", 0.25], ["epic", 0.5], ["scroll:1", 0.25]]), [["scroll:1", 0.5], ["epic", 0.5]]);
+});
+
 test("hhmm", () => {
     assert.equal(lib.hhmm(new Date(2026, 0, 5, 9, 7).getTime()), "09:07");
 });

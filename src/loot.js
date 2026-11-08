@@ -91,6 +91,7 @@ function lootLog() {
         chestBox.appendChild(head);
         ids.forEach(function(id) {
             var c = all[id], s = stated[id] || { name: id === "?" ? "UNKNOWN BOX" : id, odds: [] };
+            s.odds = mergeOdds(s.odds || []);
             var title = document.createElement("div");
             title.className = "omhp-chests-box";
             title.textContent = (s.name || id).toUpperCase() + " · opened " + fmt(c.opened) +
@@ -235,7 +236,7 @@ function lootLog() {
                     // Only fresh lines (.new), not history the feed loads when you scroll
                     if (n.nodeType !== 1 || !n.classList.contains("me") || !n.classList.contains("new")) return;
                     if (Date.now() - started < 3000) return; // the first batch on load is old news
-                    if (n.matches(".k-loot, .k-unbox, .k-box, .k-scroll_find") || /\bfound\b/.test(n.textContent)) add(n);
+                    if (n.matches(".k-loot, .k-unbox, .k-box, .k-scroll_drop") || /\bfound\b/.test(n.textContent)) add(n);
                 });
             });
         }).observe(feed, { childList: true });

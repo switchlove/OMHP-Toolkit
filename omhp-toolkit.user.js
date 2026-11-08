@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.35
+// @version      0.36
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -142,8 +142,9 @@
         { name: "WHITE", hex: "#e8e1cb" }
     ];
     var ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-    // The site's item rarities, lowest first (its r-* classes)
-    var RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "godly", "ascended", "sovereign"];
+    // The site's item rarities, lowest first (its r-* classes), in HELP > RARITIES' order: BOSS
+    // UNIQUE beats ASCENDED, SOVEREIGN beats both
+    var RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "godly", "ascended", "boss_unique", "sovereign"];
     var NOTIFY_RARITY_KEY = "omhp.layout.notifyRarity";
     // What a layout is made of (presets, RESET): column sizes, section order and heights,
     // collapsed sections, the pinned panel and its height, pop-out windows
@@ -151,7 +152,7 @@
     var DAYS_KEY = "omhp.days";
     var PRESETS_KEY = "omhp.presets";
 
-    var SCRIPT_VERSION = '0.35';
+    var SCRIPT_VERSION = '0.36';
     var ACTIVE_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || SCRIPT_VERSION;
     console.log(`%c[OMHP Toolkit] v${ACTIVE_VERSION} Active`, 'color: #c93fff; font-weight: bold;');
 
@@ -239,6 +240,20 @@
         if (kind === "ultimate") return "ULTIMATE RECHARGE";
         if (kind === "scroll") return "A SCROLL";
         return kind.replace(/_/g, " ").toUpperCase();
+    }
+
+    // A box's stated odds ([[key, chance]]) with rows that share a key added up, in first-seen
+    // order. The SCROLL BOX lists each scroll as its own "scroll:1" row without saying which.
+    function mergeOdds(odds) {
+        var out = [], at = {};
+        odds.forEach(function(o) {
+            if (o[0] in at) out[at[o[0]]][1] += o[1];
+            else {
+                at[o[0]] = out.length;
+                out.push([o[0], o[1]]);
+            }
+        });
+        return out;
     }
 
     // HP lost per minute over the last `mins` minutes of samples ({ t, hp }, oldest first), or
@@ -3515,7 +3530,7 @@
         function paintLootMin() {
             var r = notifyRarity();
             lootMin.className = "btn-text omhp-choice on r-" + r;
-            lootMin.textContent = r.toUpperCase() + " OR BETTER";
+            lootMin.textContent = outcomeLabel(r) + " OR BETTER";
         }
         paintLootMin();
         row("LOOT ALERT", [lootMin]);
@@ -3946,6 +3961,7 @@
             chestBox.appendChild(head);
             ids.forEach(function(id) {
                 var c = all[id], s = stated[id] || { name: id === "?" ? "UNKNOWN BOX" : id, odds: [] };
+                s.odds = mergeOdds(s.odds || []);
                 var title = document.createElement("div");
                 title.className = "omhp-chests-box";
                 title.textContent = (s.name || id).toUpperCase() + " · opened " + fmt(c.opened) +
@@ -4090,7 +4106,7 @@
                         // Only fresh lines (.new), not history the feed loads when you scroll
                         if (n.nodeType !== 1 || !n.classList.contains("me") || !n.classList.contains("new")) return;
                         if (Date.now() - started < 3000) return; // the first batch on load is old news
-                        if (n.matches(".k-loot, .k-unbox, .k-box, .k-scroll_find") || /\bfound\b/.test(n.textContent)) add(n);
+                        if (n.matches(".k-loot, .k-unbox, .k-box, .k-scroll_drop") || /\bfound\b/.test(n.textContent)) add(n);
                     });
                 });
             }).observe(feed, { childList: true });

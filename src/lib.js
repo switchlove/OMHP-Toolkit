@@ -84,6 +84,20 @@ function outcomeLabel(key) {
     return kind.replace(/_/g, " ").toUpperCase();
 }
 
+// A box's stated odds ([[key, chance]]) with rows that share a key added up, in first-seen
+// order. The SCROLL BOX lists each scroll as its own "scroll:1" row without saying which.
+function mergeOdds(odds) {
+    var out = [], at = {};
+    odds.forEach(function(o) {
+        if (o[0] in at) out[at[o[0]]][1] += o[1];
+        else {
+            at[o[0]] = out.length;
+            out.push([o[0], o[1]]);
+        }
+    });
+    return out;
+}
+
 // HP lost per minute over the last `mins` minutes of samples ({ t, hp }, oldest first), or
 // over all of them if they cover less; null when they cover under half a minute
 function rateOver(samples, now, mins) {

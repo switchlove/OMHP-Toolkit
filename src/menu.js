@@ -186,7 +186,7 @@ function toolkitMenu() {
     function paintLootMin() {
         var r = notifyRarity();
         lootMin.className = "btn-text omhp-choice on r-" + r;
-        lootMin.textContent = r.toUpperCase() + " OR BETTER";
+        lootMin.textContent = outcomeLabel(r) + " OR BETTER";
     }
     paintLootMin();
     row("LOOT ALERT", [lootMin]);
