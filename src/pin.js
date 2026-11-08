@@ -121,7 +121,7 @@ function pinPanel() {
         x.addEventListener("click", function() { unpin(key); });
         var p = {
             key: key, panel: panel, home: panel.nextSibling, slot: slot,
-            keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
+            keepShown: watcher(function() { if (panel.hidden) panel.hidden = false; })
         };
         var fold = document.createElement("button");
         fold.type = "button";

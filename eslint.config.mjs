@@ -18,8 +18,8 @@ export default [
         },
     },
     {
-        // The build script and the tests run in Node
-        files: ["build.js", "test/**/*.js"],
+        // The build script, the tests and the site canary run in Node
+        files: ["build.js", "test/**/*.js", "tools/**/*.js"],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: "commonjs",

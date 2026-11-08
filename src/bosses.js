@@ -74,7 +74,7 @@ function bossLog() {
                 save(KEY, all.slice(0, MAX));
             }
             cur = null;
-            redraw();
+            idle("bosses", redraw);
         }
         if (!cur) cur = { seq: b.seq, name: b.name || "", start: now, end: now, mine: 0, all: 0, peak: 0, healed: 0, killed: false, events: {}, ph: {} };
         cur.end = now;
@@ -106,9 +106,9 @@ function bossLog() {
     }
 
     window.addEventListener("storage", function(e) {
-        if (e.key === KEY || e.key === GRAPHS_KEY) redraw();
+        if (e.key === KEY || e.key === GRAPHS_KEY) idle("bosses", redraw);
     });
-    document.addEventListener("omhp-graphs", redraw); // this tab kept a fight (graph.js)
+    document.addEventListener("omhp-graphs", function() { idle("bosses", redraw); }); // this tab kept a fight (graph.js)
     redraw();
     sample();
     every(5000, sample);

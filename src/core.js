@@ -20,6 +20,7 @@ function loadSaved(key) {
 var storageFull = false;
 
 function save(key, value) {
+    if (account.held && ACCOUNT_KEYS.indexOf(key) !== -1) return; // see accountSeen
     var text = JSON.stringify(value);
     try {
         localStorage.setItem(key, text);
@@ -33,6 +34,77 @@ function save(key, value) {
         }
         storageFull = true;
     }
+}
+
+// Stats are kept per account: the keys below belong to whoever owns them (omhp.account), and
+// logging in as someone else packs them away under omhp.acct.<their id> and unpacks yours.
+// Until this tab knows who's playing (or 15s pass), saves to these keys wait, so one account's
+// numbers don't land in another's.
+var ACCOUNT_KEY = "omhp.account";
+var ACCOUNT_KEYS = ["omhp.session", "omhp.loot", "omhp.chests", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs",
+    "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.watchSeen", "omhp.layout.watchHits",
+    "omhp.layout.undercutSeen", "omhp.layout.dailyNote"];
+var account = { owner: loadJSON(ACCOUNT_KEY, null), me: null };
+account.held = !!account.owner;
+setTimeout(function() { account.held = false; }, 15000);
+
+// The account playing in this tab is id: carry on, adopt the data (first time), or swap
+function accountSeen(id) {
+    if (!id || account.me) return;
+    account.me = id;
+    if (!account.owner || account.owner === id) {
+        if (!account.owner) save(ACCOUNT_KEY, id);
+        account.owner = id;
+        account.held = false;
+        return;
+    }
+    try {
+        var mine = {};
+        ACCOUNT_KEYS.forEach(function(k) {
+            var v = localStorage.getItem(k);
+            if (v != null) mine[k] = v;
+        });
+        // Packed first: if there's no room for it, nothing is removed
+        localStorage.setItem("omhp.acct." + account.owner, JSON.stringify(mine));
+        var theirs = loadJSON("omhp.acct." + id, {});
+        ACCOUNT_KEYS.forEach(function(k) {
+            if (typeof theirs[k] === "string") localStorage.setItem(k, theirs[k]);
+            else localStorage.removeItem(k);
+        });
+        localStorage.removeItem("omhp.acct." + id);
+        localStorage.setItem(ACCOUNT_KEY, JSON.stringify(id));
+    } catch (e) {
+        // No room to pack them away: keep going with the data as it is
+        account.held = false;
+        return;
+    }
+    location.reload();
+}
+
+// Who's playing, from the page script's data-me; another tab switching accounts reloads this one
+function accountGuard() {
+    var bridge = document.getElementById("omhp-boss-data");
+    if (!bridge) return;
+    var check = function() {
+        try { accountSeen(JSON.parse(bridge.dataset.me || "{}").id); } catch (e) { /* not yet */ }
+    };
+    watcher(check).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+    check();
+    window.addEventListener("storage", function(e) {
+        if (e.key === ACCOUNT_KEY && account.me && loadJSON(ACCOUNT_KEY, null) !== account.me) location.reload();
+    });
+}
+
+// Other accounts' packed-away stats: how many, and dropping them ([TOOLKIT] > STORAGE)
+function otherAccounts() {
+    var out = [];
+    try {
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k.indexOf("omhp.acct.") === 0) out.push(k);
+        }
+    } catch (e) { /* storage blocked */ }
+    return out;
 }
 
 // This toolkit's saved data, biggest first: [{ key, size }], size in characters
@@ -75,12 +147,109 @@ function cleanUp(keep) {
     return freed;
 }
 
+// PERF ([TOOLKIT]): how long each feature's watchers and timers take, over the last 5 minutes.
+// Work is filed under the feature that set it up: run() in main.js names the one starting, and
+// anything a timed callback sets up goes under the same name.
+var perf = { cur: "core", mins: [], since: Date.now(), slow: { ms: 0, name: "" }, start: {} };
+
+// Run fn as the named feature (its start-up time is kept apart from the rest)
+function perfAs(name, fn) {
+    var was = perf.cur, t = performance.now();
+    perf.cur = name;
+    try {
+        return fn();
+    } finally {
+        perf.start[name] = (perf.start[name] || 0) + performance.now() - t;
+        perf.cur = was;
+    }
+}
+
+// fn, timed under the feature setting it up now
+function timed(fn) {
+    var name = perf.cur;
+    return function() {
+        var was = perf.cur, t = performance.now();
+        perf.cur = name;
+        try {
+            return fn.apply(this, arguments);
+        } finally {
+            perf.cur = was;
+            perfAdd(name, performance.now() - t);
+        }
+    };
+}
+
+function perfAdd(name, ms) {
+    var min = Math.floor(Date.now() / 60000);
+    var bin = perf.mins[perf.mins.length - 1];
+    if (!bin || bin.min !== min) {
+        bin = { min: min, by: {} };
+        perf.mins.push(bin);
+        if (perf.mins.length > 5) perf.mins.shift();
+    }
+    var row = bin.by[name] || (bin.by[name] = [0, 0]);
+    row[0] += ms;
+    row[1]++;
+    if (ms > perf.slow.ms) perf.slow = { ms: ms, name: name };
+}
+
+// [{ name, perMin, calls }], busiest first: ms per minute over the last 5 minutes (or since
+// the page opened or [RESET], if that's sooner)
+function perfTable() {
+    var now = Date.now(), sum = {};
+    perf.mins.forEach(function(b) {
+        if (Math.floor(now / 60000) - b.min >= 5) return;
+        Object.keys(b.by).forEach(function(k) {
+            var s = sum[k] || (sum[k] = [0, 0]);
+            s[0] += b.by[k][0];
+            s[1] += b.by[k][1];
+        });
+    });
+    var mins = Math.max(1 / 6, Math.min(5, (now - perf.since) / 60000));
+    return Object.keys(sum).map(function(k) {
+        return { name: k, perMin: sum[k][0] / mins, calls: Math.round(sum[k][1] / mins) };
+    }).sort(function(a, b) { return b.perMin - a.perMin; });
+}
+
+function perfReset() {
+    perf.mins = [];
+    perf.since = Date.now();
+    perf.slow = { ms: 0, name: "" };
+}
+
+// A feature's name as [TOOLKIT] shows it
+function perfLabel(name) {
+    var f = FEATURES.filter(function(x) { return x[0] === name; })[0];
+    return f ? f[1] : name.toUpperCase();
+}
+
+// Redraws that can wait for a quiet moment, so they never hold up an attack click:
+// idle(key, fn) runs fn when the browser is idle (1.5s at the latest), once however many
+// times it's asked for that key before then. PERF times it under whoever asked.
+var idleQueued = {};
+
+function idle(key, fn) {
+    if (idleQueued[key]) return;
+    idleQueued[key] = true;
+    var go = timed(function() {
+        idleQueued[key] = false;
+        fn();
+    });
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 1500 });
+    else setTimeout(go, 200);
+}
+
+// A MutationObserver whose callback PERF times
+function watcher(fn) {
+    return new MutationObserver(timed(fn));
+}
+
 // One clock for the whole script: every(ms, fn) runs fn about every ms. With
 // { visible: true } it skips while this tab is in the background.
 var ticks = [];
 
 function every(ms, fn, opts) {
-    ticks.push({ ms: ms, fn: fn, next: Date.now() + ms, visible: !!(opts && opts.visible) });
+    ticks.push({ ms: ms, fn: timed(fn), next: Date.now() + ms, visible: !!(opts && opts.visible) });
 }
 setInterval(function() {
     var now = Date.now();
@@ -105,7 +274,7 @@ function onTabsChange(fn) {
             tabWatchers.forEach(function(f) { f(); });
         }).observe(tabs, { childList: true, characterData: true, subtree: true });
     }
-    tabWatchers.push(fn);
+    tabWatchers.push(timed(fn));
 }
 
 // The box for [PIN] and [POP OUT] in the tab bar. With FLAT TABS it sits at the right of the
@@ -126,6 +295,24 @@ function tabTools(tabs) {
 // page script to play one of the site's sounds, which it only does while the site's [SND:ON]
 var SOUNDS_KEY = "omhp.layout.sounds";
 var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"], ["watch", "AUCTION MATCH"]];
+
+// EFFECTS ([TOOLKIT], see effectToggles): the background mist (how it moves, its colour, how
+// strong), and parts of the site's effects to switch off on their own. [id, label, hint]
+var EFFECTS_KEY = "omhp.layout.effects";
+var MIST_MODES = [["live", "LIVE", "the site's moving mist"],
+    ["still", "STILL", "the mist stands still (drawn again when the boss's phase or your colours change)"],
+    ["off", "OFF", "no mist (it isn't drawn at all)"]];
+var MIST_TINTS = [["site", "SITE", "the site's colours: amber and red in the later phases, the boss's own colour"],
+    ["theme", "THEME", "the theme's mist colour (CUSTOM has its own MIST)"], ["accent", "HIGHLIGHT", "your highlight colour"]];
+var MIST_STRENGTHS = [["faint", "FAINT", "fainter mist"], ["normal", "NORMAL", "as the site has it"], ["bright", "BRIGHT", "stronger mist"]];
+var EFFECT_SWITCHES = [["scanlines", "NO SCANLINES", "no CRT scanlines and dark corners over the page"],
+    ["numbers", "NO DAMAGE NUMBERS", "no floating hit numbers over the boss (loot and other callouts stay)"]];
+
+function effectSettings() {
+    var fx = loadSaved(EFFECTS_KEY);
+    return { bg: fx.bg || "live", tint: fx.tint || "site", strength: fx.strength || "normal",
+        scanlines: !!fx.scanlines, numbers: !!fx.numbers };
+}
 
 function playSound(name) {
     if (!loadSaved(SOUNDS_KEY)[name]) return;
@@ -177,13 +364,13 @@ function hoverTips() {
 // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
 // redraw of a site panel can be hundreds)
 function observeBatched(el, opts, fn) {
-    var queued = false;
+    var queued = false, run = timed(fn);
     new MutationObserver(function() {
         if (queued) return;
         queued = true;
         requestAnimationFrame(function() {
             queued = false;
-            fn();
+            run();
         });
     }).observe(el, opts);
 }
@@ -228,6 +415,8 @@ function applyTheme(name) {
         if (vars && vars[v]) root.setProperty("--" + v, vars[v]);
         else root.removeProperty("--" + v);
     });
+    if (vars && vars.mist) root.setProperty("--omhp-mist", vars.mist);
+    else root.removeProperty("--omhp-mist");
 }
 
 // Before anything else paints, so there's no flash of the old colours
@@ -239,7 +428,7 @@ applyAccent(loadJSON(ACCENT_KEY, null));
 var settingWatchers = [];
 
 function onSetting(fn) {
-    settingWatchers.push(fn);
+    settingWatchers.push(timed(fn));
 }
 
 window.addEventListener("storage", function(e) {
@@ -287,7 +476,7 @@ function runningEvent() {
 function eventTag(withName) {
     var ev = runningEvent();
     if (!ev) return "";
-    var name = withName && ev.name ? String(ev.name).toUpperCase() : eventLabel(ev.kind);
+    var name = withName && ev.name ? String(ev.name).toUpperCase() : eventLabel(ev.kind, ev.round);
     return name + (ev.until ? " " + clockDur(ev.until - Date.now()) : "");
 }
 
@@ -358,7 +547,7 @@ function myTotals() {
 
 // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
 function isOurKey(k) {
-    return k.indexOf("omhp.layout.") === 0 ||
+    return k.indexOf("omhp.layout.") === 0 || k.indexOf("omhp.acct.") === 0 || k === ACCOUNT_KEY ||
         ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", "omhp.records", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
 }
 

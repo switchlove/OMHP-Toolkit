@@ -18,7 +18,7 @@ function damageShare() {
     }
 
     [mine, all].forEach(function(el) {
-        new MutationObserver(paint).observe(el, { childList: true, characterData: true, subtree: true });
+        watcher(paint).observe(el, { childList: true, characterData: true, subtree: true });
     });
     paint();
 }
@@ -96,7 +96,7 @@ function sessionStats() {
         var before = JSON.stringify(s);
         change(s);
         if (JSON.stringify(s) !== before) save(KEY, s);
-        paint();
+        idle("session", paint);
     }
 
     // Time with the game open: each tab adds the time since the last tick by any tab,
@@ -146,9 +146,9 @@ function sessionStats() {
         if ((kind === "day" || kind === "streak") && flashed[kind] === today()) return;
         flashed[kind] = today();
         flash = { kind: kind, until: Date.now() + 8000 };
-        paint();
+        idle("session", paint);
         setTimeout(paint, 8100);
-        if (!recBox.hidden) paintRecords();
+        if (!recBox.hidden) idle("records", paintRecords);
     });
 
     tools.appendChild(recNote);
@@ -314,11 +314,11 @@ function sessionStats() {
             if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
             s.last = t;
             // Shards: only the leader counts changes in the balance, so two tabs don't
-            // count the same one twice
+            // count the same one twice. PRESTIGE (no shards and an empty bag at once) isn't spending.
             if (typeof t.shards === "number" && isLeader()) {
                 var d = s.shards.last === null ? 0 : t.shards - s.shards.last;
                 if (d > 0) s.shards.earned += d;
-                else if (d < 0) s.shards.spent -= d;
+                else if (d < 0 && (t.shards > 0 || t.bag !== 0)) s.shards.spent -= d;
                 s.shards.last = t.shards;
             }
             // Records: today's damage, and how many days in a row you've played (checked daily)
@@ -344,17 +344,17 @@ function sessionStats() {
         });
     }
 
-    new MutationObserver(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
+    watcher(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
     var bridge = document.getElementById("omhp-boss-data");
-    if (bridge) new MutationObserver(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
-    if (lastHit) new MutationObserver(function() { if (hitSeen) readHit(); }).observe(lastHit, { childList: true, characterData: true, subtree: true });
+    if (bridge) watcher(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+    if (lastHit) watcher(function() { if (hitSeen) readHit(); }).observe(lastHit, { childList: true, characterData: true, subtree: true });
     // Only hits from now on: the one on screen at load was recorded by an earlier page
     var hitSeen = false;
     setTimeout(function() { hitSeen = true; }, 3000);
     // Another tab saved: show its numbers
     window.addEventListener("storage", function(e) {
-        if (e.key === KEY) paint();
-        if (e.key === DAYS_KEY && !daysBox.hidden) paintDays();
+        if (e.key === KEY) idle("session", paint);
+        if (e.key === DAYS_KEY && !daysBox.hidden) idle("days", paintDays);
     });
     every(10000, readDamage);
     every(10000, tickActive);

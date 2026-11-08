@@ -123,21 +123,24 @@ function shrinkPoints(points, n) {
 }
 
 // A theme as a short code to share: "OMHP1-", then the theme's colours (bg, bg-2, fg, dim,
-// faint) and the highlight colour, as six hex colours without the "#"
+// faint) and the highlight colour, as six hex colours without the "#", then its mist colour
+// if it has one (codes without it still work)
 var THEME_VARS = ["bg", "bg-2", "fg", "dim", "faint"];
 
 function themeCode(vars, accent) {
     return "OMHP1-" + THEME_VARS.map(function(v) { return vars[v] || "#000000"; }).concat([accent || "#ffb000"])
+        .concat(vars.mist ? [vars.mist] : [])
         .map(function(hex) { return hex.replace("#", "").toLowerCase(); }).join("-");
 }
 
 // ...and back: { vars, accent }, or null if it isn't a theme code
 function parseThemeCode(code) {
-    var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6})$/i);
+    var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6}(?:-[0-9a-f]{6})?)$/i);
     if (!m) return null;
     var hex = m[1].toLowerCase().split("-").map(function(h) { return "#" + h; });
     var vars = {};
     THEME_VARS.forEach(function(v, i) { vars[v] = hex[i]; });
+    if (hex[6]) vars.mist = hex[6];
     return { vars: vars, accent: hex[5] };
 }
 
@@ -241,8 +244,38 @@ function unpackPoints(packed) {
 // World event kinds as short names for the title and graph: "laststand" -> "LAST STAND"
 var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND" };
 
-function eventLabel(kind) {
+// round: SECOND WIND's round (3 and 4 are THIRD and FOURTH WIND)
+function eventLabel(kind, round) {
+    if (kind === "second_wind" && (round === 3 || round === 4)) return round === 3 ? "3RD WIND" : "4TH WIND";
     return EVENT_NAMES[kind] || String(kind || "event").replace(/_/g, " ").toUpperCase();
+}
+
+// An achievement's "N% OF PLAYERS HAVE THIS" line as a number: "12.5% ..." -> 12.5,
+// "UNDER 0.1% ..." -> 0.05, "NOBODY HAS THIS YET" -> 0, anything else -> null
+function achievementPct(text) {
+    text = String(text || "");
+    if (/NOBODY HAS THIS/.test(text)) return 0;
+    if (/UNDER 0\.1%/.test(text)) return 0.05;
+    var m = text.match(/([\d.]+)%\s+OF PLAYERS/);
+    return m ? Number(m[1]) : null;
+}
+
+// Where each achievement goes when sorted by how many players have it (dir "rare": fewest
+// first, "common": most first). items: [{ pinned, pct }] in the site's order; returns each one's
+// place. Pinned ones stay first, in their order; ties keep the site's order; no pct goes last.
+function achievementOrder(items, dir) {
+    var idx = items.map(function(x, i) { return i; });
+    var group = function(x) { return x.pinned ? 0 : x.pct === null ? 2 : 1; };
+    idx.sort(function(a, b) {
+        var A = items[a], B = items[b];
+        var g = group(A) - group(B);
+        if (g) return g;
+        if (group(A) === 1 && A.pct !== B.pct) return dir === "common" ? B.pct - A.pct : A.pct - B.pct;
+        return a - b;
+    });
+    var place = [];
+    idx.forEach(function(i, n) { place[i] = n; });
+    return place;
 }
 
 // A countdown as a clock: 102000 -> "1:42", 3723000 -> "1:02:03"

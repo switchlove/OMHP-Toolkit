@@ -58,7 +58,8 @@ function attackTimer() {
         var full = per > 0 && left >= per;
         var wasted = idle(full);
         if (full) {
-            line.textContent = "FULL" + wasted;
+            // The site's line above already says ATTACKS FULL
+            line.textContent = wasted.replace(/^ · /, "");
             line.title = "time today your attacks sat full, recharging nothing";
             return;
         }

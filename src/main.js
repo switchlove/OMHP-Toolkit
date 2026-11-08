@@ -3,22 +3,23 @@ function moveSections() {
     function run(name, fn) {
         if (!isOn(name)) return;
         try {
-            if (fn() === false) broken.push(name.toUpperCase());
+            if (perfAs(name, fn) === false) broken.push(name.toUpperCase());
         } catch (e) {
             broken.push(name.toUpperCase());
             console.error("OMHP Toolkit:", name, e);
         }
     }
 
-    pinMain();
-    hoverTips();
-    paintAccount(); // always: it also publishes the boss data (see trueBoss)
+    perfAs("pin", pinMain);
+    perfAs("tips", hoverTips);
+    perfAs("page", paintAccount); // always: it also publishes the boss data (see trueBoss)
+    perfAs("account", accountGuard);
     run("graph", bossGraph);
     run("eta", bossEta);
     run("share", damageShare);
     run("session", sessionStats);
     run("full", attackTimer);
-    toolkitMenu();
+    perfAs("menu", toolkitMenu);
     run("clock", clock);
     run("flattabs", shortTabs);
     run("title", tabTitle);
@@ -28,13 +29,16 @@ function moveSections() {
     run("boxorder", bagBoxOrder);
     run("watch", auctionWatch);
     run("chatplus", chatPlus);
-    soundAlerts();
-    clanFold();
-    pinPanel();
-    floatingPanels();
+    perfAs("sounds", soundAlerts);
+    perfAs("clan", clanFold);
+    perfAs("tickets", ticketFilters);
+    perfAs("achievements", achievementSort);
+    perfAs("effects", effectToggles);
+    perfAs("pin", pinPanel);
+    perfAs("windows", floatingPanels);
     run("loot", lootLog);
     run("bosses", bossLog);
-    healthCheck();
+    perfAs("health", healthCheck);
     var columns = document.querySelector("#app .columns");
     if (!columns) return;
     for (var i = 0; i < SECTIONS.length; i++) {
@@ -70,7 +74,7 @@ function moveSections() {
 
     // The site's tab code hides these panels whenever another tab is picked;
     // keep them showing so the site also treats them as open.
-    var keepShown = new MutationObserver(function() {
+    var keepShown = watcher(function() {
         panels.forEach(function(p) { if (p.hidden) p.hidden = false; });
         fixRightPanel();
     });

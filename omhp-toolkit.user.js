@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.33
+// @version      0.35
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -30,7 +30,9 @@
 //     opens it in a floating window.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
-//     MEMBERS list folds away with [-] / [+] on its heading.
+//     MEMBERS list folds away with [-] / [+] on its heading. TICKETS gets [ HIDE VOTED ] (only
+//     the tickets you haven't voted on yet) and [ HIDE CLOSED ]. ACHIEVEMENTS gets [ RAREST ]
+//     and [ MOST HAVE IT ], to sort by how many players have each one.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -62,19 +64,21 @@
 //     by phase on hover (BOSSES lists each boss's events and phases too).
 //     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
-//     your attacks sat full, recharging nothing.
+//     your attacks sat full, recharging nothing (under the site's ATTACKS FULL).
 //   - LOOT: what you found today, counted by rarity with drops per 100 attacks (kept like
 //     SESSION, with [RESET]; hover for the last 30 days). [CHESTS] compares what your
 //     box openings gave with the site's stated odds.
 //
 // TOP BAR
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
-//     own CUSTOM colours, shareable as a code), FEATURES
-//     to switch parts of this script on or off (applies on reload), the loot alert
-//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, EXPORT / IMPORT
-//     of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it)
-//     and COPY DEBUG (details for a bug report). Settings changed in one tab apply in
-//     your other open tabs at once.
+//     own CUSTOM colours, shareable as a code), the background mist (LIVE, STILL or OFF;
+//     the site's colours, the theme's or your highlight colour; FAINT to BRIGHT), EFFECTS
+//     (NO SCANLINES, NO DAMAGE NUMBERS), FEATURES to switch parts of this script on or off
+//     (applies on reload), the loot alert rarity, the shortcut keys, add-ons it found,
+//     saved LAYOUTs, EXPORT / IMPORT of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it),
+//     PERF (which features take the most time, to track down lag) and COPY DEBUG
+//     (details for a bug report). Settings changed in one tab apply in your other open
+//     tabs at once. Stats are kept per account: log in as someone else and theirs swap in.
 //   - Local time, how long the page has been open, and the next DAILY reward (READY when
 //     it's waiting; NOTIFY reminds you once a day).
 //   - The account button shows your badges and name instead of [LOGIN].
@@ -82,7 +86,7 @@
 //
 // MORE
 //   - Alt shortcuts: Alt+1..9 picks a right-column tab, Alt+P pins, Alt+O pops out,
-//     Alt+T opens [TOOLKIT].
+//     Alt+T opens [TOOLKIT]. Esc leaves a text box, so the site's keys attack again.
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
 //   - AUCTION WATCH: [+ THIS SEARCH] above the auction house watches your last search with a
@@ -117,11 +121,12 @@
     var ORDER_KEY = "omhp.layout.order";
     var THEME_KEY = "omhp.layout.theme";
     var PIN_KEY = "omhp.layout.pinned";
+    // Each theme's colours; mist is the background mist's (with [TOOLKIT] > MIST > THEME)
     var THEMES = [
         { name: "TERMINAL", vars: null }, // the site's own colours
-        { name: "MIDNIGHT", vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550" } },
-        { name: "PHOSPHOR", vars: { bg: "#040904", "bg-2": "#0a140a", fg: "#b6ffb0", dim: "#5f9a5a", faint: "#1f3a1f" } },
-        { name: "PAPER", vars: { bg: "#f4efe2", "bg-2": "#e9e2d0", fg: "#2a2620", dim: "#6e665a", faint: "#c9c0ab" } }
+        { name: "MIDNIGHT", vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550", mist: "#6a7fb4" } },
+        { name: "PHOSPHOR", vars: { bg: "#040904", "bg-2": "#0a140a", fg: "#b6ffb0", dim: "#5f9a5a", faint: "#1f3a1f", mist: "#58b852" } },
+        { name: "PAPER", vars: { bg: "#f4efe2", "bg-2": "#e9e2d0", fg: "#2a2620", dim: "#6e665a", faint: "#c9c0ab", mist: "#8c826e" } }
     ];
     var STORE_KEY = "omhp.layout.collapsed";
     var HEIGHTS_KEY = "omhp.layout.heights";
@@ -145,6 +150,10 @@
     var LAYOUT_KEYS = [ORDER_KEY, STORE_KEY, "omhp.layout.heights", "omhp.layout.widths", "omhp.layout.pinH", "omhp.layout.floats", PIN_KEY];
     var DAYS_KEY = "omhp.days";
     var PRESETS_KEY = "omhp.presets";
+
+    var SCRIPT_VERSION = '0.35';
+    var ACTIVE_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || SCRIPT_VERSION;
+    console.log(`%c[OMHP Toolkit] v${ACTIVE_VERSION} Active`, 'color: #c93fff; font-weight: bold;');
 
     // Pure helpers: they don't touch the page or storage, so test/lib.test.js runs them in Node.
 
@@ -271,21 +280,24 @@
     }
 
     // A theme as a short code to share: "OMHP1-", then the theme's colours (bg, bg-2, fg, dim,
-    // faint) and the highlight colour, as six hex colours without the "#"
+    // faint) and the highlight colour, as six hex colours without the "#", then its mist colour
+    // if it has one (codes without it still work)
     var THEME_VARS = ["bg", "bg-2", "fg", "dim", "faint"];
 
     function themeCode(vars, accent) {
         return "OMHP1-" + THEME_VARS.map(function(v) { return vars[v] || "#000000"; }).concat([accent || "#ffb000"])
+            .concat(vars.mist ? [vars.mist] : [])
             .map(function(hex) { return hex.replace("#", "").toLowerCase(); }).join("-");
     }
 
     // ...and back: { vars, accent }, or null if it isn't a theme code
     function parseThemeCode(code) {
-        var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6})$/i);
+        var m = String(code || "").trim().match(/^OMHP1-((?:[0-9a-f]{6}-){5}[0-9a-f]{6}(?:-[0-9a-f]{6})?)$/i);
         if (!m) return null;
         var hex = m[1].toLowerCase().split("-").map(function(h) { return "#" + h; });
         var vars = {};
         THEME_VARS.forEach(function(v, i) { vars[v] = hex[i]; });
+        if (hex[6]) vars.mist = hex[6];
         return { vars: vars, accent: hex[5] };
     }
 
@@ -389,8 +401,38 @@
     // World event kinds as short names for the title and graph: "laststand" -> "LAST STAND"
     var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND" };
 
-    function eventLabel(kind) {
+    // round: SECOND WIND's round (3 and 4 are THIRD and FOURTH WIND)
+    function eventLabel(kind, round) {
+        if (kind === "second_wind" && (round === 3 || round === 4)) return round === 3 ? "3RD WIND" : "4TH WIND";
         return EVENT_NAMES[kind] || String(kind || "event").replace(/_/g, " ").toUpperCase();
+    }
+
+    // An achievement's "N% OF PLAYERS HAVE THIS" line as a number: "12.5% ..." -> 12.5,
+    // "UNDER 0.1% ..." -> 0.05, "NOBODY HAS THIS YET" -> 0, anything else -> null
+    function achievementPct(text) {
+        text = String(text || "");
+        if (/NOBODY HAS THIS/.test(text)) return 0;
+        if (/UNDER 0\.1%/.test(text)) return 0.05;
+        var m = text.match(/([\d.]+)%\s+OF PLAYERS/);
+        return m ? Number(m[1]) : null;
+    }
+
+    // Where each achievement goes when sorted by how many players have it (dir "rare": fewest
+    // first, "common": most first). items: [{ pinned, pct }] in the site's order; returns each one's
+    // place. Pinned ones stay first, in their order; ties keep the site's order; no pct goes last.
+    function achievementOrder(items, dir) {
+        var idx = items.map(function(x, i) { return i; });
+        var group = function(x) { return x.pinned ? 0 : x.pct === null ? 2 : 1; };
+        idx.sort(function(a, b) {
+            var A = items[a], B = items[b];
+            var g = group(A) - group(B);
+            if (g) return g;
+            if (group(A) === 1 && A.pct !== B.pct) return dir === "common" ? B.pct - A.pct : A.pct - B.pct;
+            return a - b;
+        });
+        var place = [];
+        idx.forEach(function(i, n) { place[i] = n; });
+        return place;
     }
 
     // A countdown as a clock: 102000 -> "1:42", 3723000 -> "1:02:03"
@@ -530,7 +572,14 @@
         /* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
         html.omhp-flattabs #tabs { position: relative; }
         html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; z-index: 31; white-space: nowrap; }
-        html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
+        html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu,
+        html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group[hidden] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
+        /* A section with nothing unlocked stays hidden (display: contents above would show it) */
+        html.omhp-flattabs #tabs .tab-group[hidden] { display: none; }
+        /* [EVENTS]: the event's countdown sits in the line next to CITY, at the bar's size */
+        html.omhp-flattabs #tabs .limited-timer { padding: 0 4px; margin: 0; border: 0; font-size: 11px; }
+        /* CHAT in the left column: the site's own pop-out would leave its section empty (it has POP OUT) */
+        .left-section #panel-chat .chat-pop-btn { display: none; }
 
         /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
         #omhp-eta { font-size: 12px; letter-spacing: .08em; margin-top: 2px; }
@@ -746,9 +795,25 @@
         #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
 
         /* CLAN: the MEMBERS list folds away (see clanFold) */
-        #panel-clan.omhp-clan-folded .clan-members { display: none; }
+        #panel-clan.omhp-clan-folded .clan-members, #panel-clan.omhp-clan-folded .clan-sort { display: none; }
         .omhp-clan-fold { font: inherit; color: var(--dim); padding: 0; }
         .omhp-clan-fold:hover { color: var(--fg); }
+
+        /* TICKETS: [ HIDE VOTED ] [ HIDE CLOSED ] (see ticketFilters) */
+        #panel-tickets .ticket.omhp-tk-hide { display: none; }
+
+        /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
+           no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */
+        html.omhp-mist-off #mist-bg { display: none; }
+        #mist-bg.omhp-mist-held { opacity: .42; }
+        html.omhp-mist-faint #mist-bg.shown, html.omhp-mist-faint #mist-bg.omhp-mist-held { opacity: .2; }
+        html.omhp-mist-bright #mist-bg.shown, html.omhp-mist-bright #mist-bg.omhp-mist-held { opacity: .65; }
+        /* No colour fade while STILL: the frame drawn after a phase change has the new colour */
+        html.omhp-mist-still #mist-bg { transition: opacity 2s ease-out; }
+        html.omhp-mist-theme #mist-bg { color: var(--omhp-mist, #b9b4a4) !important; }
+        html.omhp-mist-accent #mist-bg { color: var(--amber) !important; }
+        html.omhp-no-scanlines .crt { display: none; }
+        html.omhp-no-numbers #popups .pop.seg { display: none; }
 
         /* BAG: smaller loot-box cards so more fit across the right column */
         .col-side .box-row, .omhp-float .box-row { gap: 6px; }
@@ -862,6 +927,7 @@
     var storageFull = false;
 
     function save(key, value) {
+        if (account.held && ACCOUNT_KEYS.indexOf(key) !== -1) return; // see accountSeen
         var text = JSON.stringify(value);
         try {
             localStorage.setItem(key, text);
@@ -875,6 +941,77 @@
             }
             storageFull = true;
         }
+    }
+
+    // Stats are kept per account: the keys below belong to whoever owns them (omhp.account), and
+    // logging in as someone else packs them away under omhp.acct.<their id> and unpacks yours.
+    // Until this tab knows who's playing (or 15s pass), saves to these keys wait, so one account's
+    // numbers don't land in another's.
+    var ACCOUNT_KEY = "omhp.account";
+    var ACCOUNT_KEYS = ["omhp.session", "omhp.loot", "omhp.chests", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs",
+        "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.watchSeen", "omhp.layout.watchHits",
+        "omhp.layout.undercutSeen", "omhp.layout.dailyNote"];
+    var account = { owner: loadJSON(ACCOUNT_KEY, null), me: null };
+    account.held = !!account.owner;
+    setTimeout(function() { account.held = false; }, 15000);
+
+    // The account playing in this tab is id: carry on, adopt the data (first time), or swap
+    function accountSeen(id) {
+        if (!id || account.me) return;
+        account.me = id;
+        if (!account.owner || account.owner === id) {
+            if (!account.owner) save(ACCOUNT_KEY, id);
+            account.owner = id;
+            account.held = false;
+            return;
+        }
+        try {
+            var mine = {};
+            ACCOUNT_KEYS.forEach(function(k) {
+                var v = localStorage.getItem(k);
+                if (v != null) mine[k] = v;
+            });
+            // Packed first: if there's no room for it, nothing is removed
+            localStorage.setItem("omhp.acct." + account.owner, JSON.stringify(mine));
+            var theirs = loadJSON("omhp.acct." + id, {});
+            ACCOUNT_KEYS.forEach(function(k) {
+                if (typeof theirs[k] === "string") localStorage.setItem(k, theirs[k]);
+                else localStorage.removeItem(k);
+            });
+            localStorage.removeItem("omhp.acct." + id);
+            localStorage.setItem(ACCOUNT_KEY, JSON.stringify(id));
+        } catch (e) {
+            // No room to pack them away: keep going with the data as it is
+            account.held = false;
+            return;
+        }
+        location.reload();
+    }
+
+    // Who's playing, from the page script's data-me; another tab switching accounts reloads this one
+    function accountGuard() {
+        var bridge = document.getElementById("omhp-boss-data");
+        if (!bridge) return;
+        var check = function() {
+            try { accountSeen(JSON.parse(bridge.dataset.me || "{}").id); } catch (e) { /* not yet */ }
+        };
+        watcher(check).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+        check();
+        window.addEventListener("storage", function(e) {
+            if (e.key === ACCOUNT_KEY && account.me && loadJSON(ACCOUNT_KEY, null) !== account.me) location.reload();
+        });
+    }
+
+    // Other accounts' packed-away stats: how many, and dropping them ([TOOLKIT] > STORAGE)
+    function otherAccounts() {
+        var out = [];
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k.indexOf("omhp.acct.") === 0) out.push(k);
+            }
+        } catch (e) { /* storage blocked */ }
+        return out;
     }
 
     // This toolkit's saved data, biggest first: [{ key, size }], size in characters
@@ -917,12 +1054,109 @@
         return freed;
     }
 
+    // PERF ([TOOLKIT]): how long each feature's watchers and timers take, over the last 5 minutes.
+    // Work is filed under the feature that set it up: run() in main.js names the one starting, and
+    // anything a timed callback sets up goes under the same name.
+    var perf = { cur: "core", mins: [], since: Date.now(), slow: { ms: 0, name: "" }, start: {} };
+
+    // Run fn as the named feature (its start-up time is kept apart from the rest)
+    function perfAs(name, fn) {
+        var was = perf.cur, t = performance.now();
+        perf.cur = name;
+        try {
+            return fn();
+        } finally {
+            perf.start[name] = (perf.start[name] || 0) + performance.now() - t;
+            perf.cur = was;
+        }
+    }
+
+    // fn, timed under the feature setting it up now
+    function timed(fn) {
+        var name = perf.cur;
+        return function() {
+            var was = perf.cur, t = performance.now();
+            perf.cur = name;
+            try {
+                return fn.apply(this, arguments);
+            } finally {
+                perf.cur = was;
+                perfAdd(name, performance.now() - t);
+            }
+        };
+    }
+
+    function perfAdd(name, ms) {
+        var min = Math.floor(Date.now() / 60000);
+        var bin = perf.mins[perf.mins.length - 1];
+        if (!bin || bin.min !== min) {
+            bin = { min: min, by: {} };
+            perf.mins.push(bin);
+            if (perf.mins.length > 5) perf.mins.shift();
+        }
+        var row = bin.by[name] || (bin.by[name] = [0, 0]);
+        row[0] += ms;
+        row[1]++;
+        if (ms > perf.slow.ms) perf.slow = { ms: ms, name: name };
+    }
+
+    // [{ name, perMin, calls }], busiest first: ms per minute over the last 5 minutes (or since
+    // the page opened or [RESET], if that's sooner)
+    function perfTable() {
+        var now = Date.now(), sum = {};
+        perf.mins.forEach(function(b) {
+            if (Math.floor(now / 60000) - b.min >= 5) return;
+            Object.keys(b.by).forEach(function(k) {
+                var s = sum[k] || (sum[k] = [0, 0]);
+                s[0] += b.by[k][0];
+                s[1] += b.by[k][1];
+            });
+        });
+        var mins = Math.max(1 / 6, Math.min(5, (now - perf.since) / 60000));
+        return Object.keys(sum).map(function(k) {
+            return { name: k, perMin: sum[k][0] / mins, calls: Math.round(sum[k][1] / mins) };
+        }).sort(function(a, b) { return b.perMin - a.perMin; });
+    }
+
+    function perfReset() {
+        perf.mins = [];
+        perf.since = Date.now();
+        perf.slow = { ms: 0, name: "" };
+    }
+
+    // A feature's name as [TOOLKIT] shows it
+    function perfLabel(name) {
+        var f = FEATURES.filter(function(x) { return x[0] === name; })[0];
+        return f ? f[1] : name.toUpperCase();
+    }
+
+    // Redraws that can wait for a quiet moment, so they never hold up an attack click:
+    // idle(key, fn) runs fn when the browser is idle (1.5s at the latest), once however many
+    // times it's asked for that key before then. PERF times it under whoever asked.
+    var idleQueued = {};
+
+    function idle(key, fn) {
+        if (idleQueued[key]) return;
+        idleQueued[key] = true;
+        var go = timed(function() {
+            idleQueued[key] = false;
+            fn();
+        });
+        if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 1500 });
+        else setTimeout(go, 200);
+    }
+
+    // A MutationObserver whose callback PERF times
+    function watcher(fn) {
+        return new MutationObserver(timed(fn));
+    }
+
     // One clock for the whole script: every(ms, fn) runs fn about every ms. With
     // { visible: true } it skips while this tab is in the background.
     var ticks = [];
 
     function every(ms, fn, opts) {
-        ticks.push({ ms: ms, fn: fn, next: Date.now() + ms, visible: !!(opts && opts.visible) });
+        ticks.push({ ms: ms, fn: timed(fn), next: Date.now() + ms, visible: !!(opts && opts.visible) });
     }
     setInterval(function() {
         var now = Date.now();
@@ -947,7 +1181,7 @@
                 tabWatchers.forEach(function(f) { f(); });
             }).observe(tabs, { childList: true, characterData: true, subtree: true });
         }
-        tabWatchers.push(fn);
+        tabWatchers.push(timed(fn));
     }
 
     // The box for [PIN] and [POP OUT] in the tab bar. With FLAT TABS it sits at the right of the
@@ -968,6 +1202,24 @@
     // page script to play one of the site's sounds, which it only does while the site's [SND:ON]
     var SOUNDS_KEY = "omhp.layout.sounds";
     var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"], ["watch", "AUCTION MATCH"]];
+
+    // EFFECTS ([TOOLKIT], see effectToggles): the background mist (how it moves, its colour, how
+    // strong), and parts of the site's effects to switch off on their own. [id, label, hint]
+    var EFFECTS_KEY = "omhp.layout.effects";
+    var MIST_MODES = [["live", "LIVE", "the site's moving mist"],
+        ["still", "STILL", "the mist stands still (drawn again when the boss's phase or your colours change)"],
+        ["off", "OFF", "no mist (it isn't drawn at all)"]];
+    var MIST_TINTS = [["site", "SITE", "the site's colours: amber and red in the later phases, the boss's own colour"],
+        ["theme", "THEME", "the theme's mist colour (CUSTOM has its own MIST)"], ["accent", "HIGHLIGHT", "your highlight colour"]];
+    var MIST_STRENGTHS = [["faint", "FAINT", "fainter mist"], ["normal", "NORMAL", "as the site has it"], ["bright", "BRIGHT", "stronger mist"]];
+    var EFFECT_SWITCHES = [["scanlines", "NO SCANLINES", "no CRT scanlines and dark corners over the page"],
+        ["numbers", "NO DAMAGE NUMBERS", "no floating hit numbers over the boss (loot and other callouts stay)"]];
+
+    function effectSettings() {
+        var fx = loadSaved(EFFECTS_KEY);
+        return { bg: fx.bg || "live", tint: fx.tint || "site", strength: fx.strength || "normal",
+            scanlines: !!fx.scanlines, numbers: !!fx.numbers };
+    }
 
     function playSound(name) {
         if (!loadSaved(SOUNDS_KEY)[name]) return;
@@ -1019,13 +1271,13 @@
     // A MutationObserver that runs fn once per frame at most, however many changes arrive (one
     // redraw of a site panel can be hundreds)
     function observeBatched(el, opts, fn) {
-        var queued = false;
+        var queued = false, run = timed(fn);
         new MutationObserver(function() {
             if (queued) return;
             queued = true;
             requestAnimationFrame(function() {
                 queued = false;
-                fn();
+                run();
             });
         }).observe(el, opts);
     }
@@ -1070,6 +1322,8 @@
             if (vars && vars[v]) root.setProperty("--" + v, vars[v]);
             else root.removeProperty("--" + v);
         });
+        if (vars && vars.mist) root.setProperty("--omhp-mist", vars.mist);
+        else root.removeProperty("--omhp-mist");
     }
 
     // Before anything else paints, so there's no flash of the old colours
@@ -1081,7 +1335,7 @@
     var settingWatchers = [];
 
     function onSetting(fn) {
-        settingWatchers.push(fn);
+        settingWatchers.push(timed(fn));
     }
 
     window.addEventListener("storage", function(e) {
@@ -1129,7 +1383,7 @@
     function eventTag(withName) {
         var ev = runningEvent();
         if (!ev) return "";
-        var name = withName && ev.name ? String(ev.name).toUpperCase() : eventLabel(ev.kind);
+        var name = withName && ev.name ? String(ev.name).toUpperCase() : eventLabel(ev.kind, ev.round);
         return name + (ev.until ? " " + clockDur(ev.until - Date.now()) : "");
     }
 
@@ -1200,7 +1454,7 @@
 
     // This toolkit's localStorage keys (the site keeps its own under omhp.* too, e.g. omhp.tab)
     function isOurKey(k) {
-        return k.indexOf("omhp.layout.") === 0 ||
+        return k.indexOf("omhp.layout.") === 0 || k.indexOf("omhp.acct.") === 0 || k === ACCOUNT_KEY ||
             ["omhp.session", "omhp.loot", "omhp.idle", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs", "omhp.chests", "omhp.records", DAYS_KEY, PRESETS_KEY].indexOf(k) !== -1;
     }
 
@@ -1453,6 +1707,16 @@
 
         section.appendChild(head);
         section.appendChild(panel);
+        // The site can float the CHAT itself (its [ POP OUT ], hidden here), which would leave
+        // this section empty: dock it with the site's own button if it was popped out before
+        if (info.key === "chat") {
+            var dock = function() {
+                var b = panel.querySelector(".chat-pop-btn:not(.chat-min-btn)");
+                if (panel.classList.contains("chat-popped") && b) b.click();
+            };
+            watcher(dock).observe(panel, { attributes: true, attributeFilter: ["class"] });
+            dock();
+        }
         if (scroller) section.appendChild(makeResizer(info, scroller, heights));
         paint();
         return section;
@@ -1527,7 +1791,7 @@
                     // The running world event, with its times in this computer's clock (the site's are
                     // the server's, in seconds); id tells one event from the next
                     const localEvent = (ev) => ev && ev.kind ? {
-                        kind: ev.kind, stage: ev.stage ?? null, name: ev.name ?? null, id: ev.started_at ?? null,
+                        kind: ev.kind, stage: ev.stage ?? null, name: ev.name ?? null, id: ev.started_at ?? null, round: ev.round ?? null,
                         until: ev.until ? Math.round(Date.now() + (ev.until - store.now()) * 1000) : null
                     } : null;
                     const publish = () => {
@@ -1546,7 +1810,7 @@
                     const publishMe = () => {
                         const m = store.state.me;
                         if (!out || !m || typeof m.total_damage !== "number") return;
-                        out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards });
+                        out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length });
                         // The order SHOP lists its loot boxes in (see bagBoxOrder)
                         const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                         if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;
@@ -2717,7 +2981,7 @@
         }
 
         [mine, all].forEach(function(el) {
-            new MutationObserver(paint).observe(el, { childList: true, characterData: true, subtree: true });
+            watcher(paint).observe(el, { childList: true, characterData: true, subtree: true });
         });
         paint();
     }
@@ -2795,7 +3059,7 @@
             var before = JSON.stringify(s);
             change(s);
             if (JSON.stringify(s) !== before) save(KEY, s);
-            paint();
+            idle("session", paint);
         }
 
         // Time with the game open: each tab adds the time since the last tick by any tab,
@@ -2845,9 +3109,9 @@
             if ((kind === "day" || kind === "streak") && flashed[kind] === today()) return;
             flashed[kind] = today();
             flash = { kind: kind, until: Date.now() + 8000 };
-            paint();
+            idle("session", paint);
             setTimeout(paint, 8100);
-            if (!recBox.hidden) paintRecords();
+            if (!recBox.hidden) idle("records", paintRecords);
         });
 
         tools.appendChild(recNote);
@@ -3013,11 +3277,11 @@
                 if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
                 s.last = t;
                 // Shards: only the leader counts changes in the balance, so two tabs don't
-                // count the same one twice
+                // count the same one twice. PRESTIGE (no shards and an empty bag at once) isn't spending.
                 if (typeof t.shards === "number" && isLeader()) {
                     var d = s.shards.last === null ? 0 : t.shards - s.shards.last;
                     if (d > 0) s.shards.earned += d;
-                    else if (d < 0) s.shards.spent -= d;
+                    else if (d < 0 && (t.shards > 0 || t.bag !== 0)) s.shards.spent -= d;
                     s.shards.last = t.shards;
                 }
                 // Records: today's damage, and how many days in a row you've played (checked daily)
@@ -3043,17 +3307,17 @@
             });
         }
 
-        new MutationObserver(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
+        watcher(readDamage).observe(bossDmg, { childList: true, characterData: true, subtree: true });
         var bridge = document.getElementById("omhp-boss-data");
-        if (bridge) new MutationObserver(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
-        if (lastHit) new MutationObserver(function() { if (hitSeen) readHit(); }).observe(lastHit, { childList: true, characterData: true, subtree: true });
+        if (bridge) watcher(readDamage).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+        if (lastHit) watcher(function() { if (hitSeen) readHit(); }).observe(lastHit, { childList: true, characterData: true, subtree: true });
         // Only hits from now on: the one on screen at load was recorded by an earlier page
         var hitSeen = false;
         setTimeout(function() { hitSeen = true; }, 3000);
         // Another tab saved: show its numbers
         window.addEventListener("storage", function(e) {
-            if (e.key === KEY) paint();
-            if (e.key === DAYS_KEY && !daysBox.hidden) paintDays();
+            if (e.key === KEY) idle("session", paint);
+            if (e.key === DAYS_KEY && !daysBox.hidden) idle("days", paintDays);
         });
         every(10000, readDamage);
         every(10000, tickActive);
@@ -3158,6 +3422,8 @@
                 var c = cs.getPropertyValue("--" + v).trim().toLowerCase();
                 out[v] = /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
             });
+            var mist = cs.getPropertyValue("--omhp-mist").trim().toLowerCase();
+            out.mist = /^#[0-9a-f]{6}$/.test(mist) ? mist : "#b9b4a4"; // the site's own mist
             return out;
         }
 
@@ -3165,11 +3431,12 @@
         // SHARE to copy its code, USE CODE to apply someone else's
         var customBody = row("CUSTOM", []);
         var customRow = customBody.parentElement;
-        var pickers = THEME_VARS.map(function(v) {
+        var CUSTOM_VARS = THEME_VARS.concat(["mist"]);
+        var pickers = CUSTOM_VARS.map(function(v) {
             var label = el("label", "omhp-custom-pick");
             var input = el("input");
             input.type = "color";
-            input.title = "the theme's " + v + " colour";
+            input.title = v === "mist" ? "the background mist's colour (with MIST: THEME)" : "the theme's " + v + " colour";
             input.addEventListener("input", function() {
                 var vars = loadSaved(CUSTOM_THEME_KEY);
                 vars[v] = input.value;
@@ -3210,7 +3477,7 @@
             customRow.hidden = currentTheme !== "CUSTOM";
             var vars = loadSaved(CUSTOM_THEME_KEY);
             pickers.forEach(function(input, i) {
-                var c = vars[THEME_VARS[i]];
+                var c = vars[CUSTOM_VARS[i]];
                 if (c && input.value !== c) input.value = c;
             });
         }
@@ -3267,7 +3534,43 @@
             return b;
         });
         row("SOUNDS", soundBtns);
-        if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
+
+        // BACKGROUND / MIST / EFFECTS: how the background mist moves, its colour and strength, and
+        // parts of the site's effects to switch off on their own (all apply at once)
+        var fxPaints = [];
+        function paintFx() {
+            fxPaints.forEach(function(f) { f(); });
+        }
+        function setFx(field, value) {
+            var all = loadSaved(EFFECTS_KEY);
+            all[field] = value;
+            save(EFFECTS_KEY, all);
+            paintFx();
+            applyEffects();
+        }
+        function fxPick(field, options) {
+            var btns = options.map(function(o) {
+                return choice(o[1], effectSettings()[field] === o[0], o[2], function() { setFx(field, o[0]); });
+            });
+            fxPaints.push(function() {
+                btns.forEach(function(b, i) { b.classList.toggle("on", effectSettings()[field] === options[i][0]); });
+            });
+            return btns;
+        }
+        var fxSwitches = EFFECT_SWITCHES.map(function(f) {
+            var b = choice(f[1], effectSettings()[f[0]], f[2], function() { setFx(f[0], !effectSettings()[f[0]]); });
+            b.classList.add("omhp-check");
+            fxPaints.push(function() {
+                b.classList.toggle("on", effectSettings()[f[0]]);
+                b.setAttribute("aria-pressed", String(effectSettings()[f[0]]));
+            });
+            return b;
+        });
+        row("BACKGROUND", fxPick("bg", MIST_MODES));
+        row("MIST", fxPick("tint", MIST_TINTS).concat([el("span", "omhp-menu-hint", "·")], fxPick("strength", MIST_STRENGTHS)));
+        row("EFFECTS", fxSwitches);
+        paintFx();
+        if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu · Esc leaves a text box")]);
 
         // Other userscripts this one knows, checked each time the menu opens
         var addons = el("span", "omhp-menu-hint");
@@ -3381,13 +3684,39 @@
 
         // What the toolkit keeps in this browser; CLEAN UP makes it smaller
         var storageNote = el("span", "omhp-menu-hint");
+        var dropOthers = choice("", false, "delete the stats kept for the other accounts that played in this browser", function() {
+            var keys = otherAccounts();
+            if (!keys.length || !confirm("Delete the saved stats of " + keys.length + " other account" + (keys.length === 1 ? "" : "s") + "?")) return;
+            keys.forEach(function(k) {
+                try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+            });
+            paintStorage();
+        });
         row("STORAGE", [storageNote, choice("CLEAN UP", false, "keep only the last 5 boss graphs and 50 loot lines", function() {
             cleanUp(5);
             paintStorage();
-        })]);
+        }), dropOthers]);
         function paintStorage() {
             var used = ourStorage().reduce(function(n, x) { return n + x.size; }, 0);
             storageNote.textContent = Math.round(used * 2 / 1024) + " KB" + (storageFull ? " · FULL" : "");
+            var others = otherAccounts().length;
+            dropOthers.hidden = !others;
+            dropOthers.textContent = "DROP " + others + " OTHER ACCOUNT" + (others === 1 ? "" : "S");
+        }
+
+        // PERF: which features take the most time (their watchers and timers), to find lag
+        var perfNote = el("span", "omhp-menu-hint");
+        var perfRow = row("PERF", [perfNote, choice("[RESET]", false, "start counting again from now", function() {
+            perfReset();
+            paintPerf();
+        })]);
+        setTip(perfRow.parentElement, "milliseconds per minute each feature spends on its watchers and timers, over the last 5 minutes. A few ms is nothing; hundreds means it's slowing the page.");
+        function paintPerf() {
+            var top = perfTable().slice(0, 5);
+            perfNote.textContent = top.length
+                ? top.map(function(r) { return perfLabel(r.name) + " " + r.perMin.toFixed(1); }).join(" · ") + " ms/min" +
+                    (perf.slow.ms >= 1 ? " · slowest " + Math.round(perf.slow.ms) + " ms (" + perfLabel(perf.slow.name) + ")" : "")
+                : "nothing yet";
         }
 
         // COPY DEBUG: details to paste into a GitHub issue when something's wrong
@@ -3414,6 +3743,7 @@
             if (key === SOUNDS_KEY) {
                 soundBtns.forEach(function(b, i) { b.classList.toggle("on", !!loadSaved(SOUNDS_KEY)[SOUND_NAMES[i][0]]); });
             }
+            if (key === EFFECTS_KEY) paintFx();
             if (key === FEATURES_KEY) {
                 featBtns.forEach(function(b, i) {
                     b.classList.toggle("on", isOn(FEATURES[i][0]));
@@ -3429,6 +3759,7 @@
             if (!pop.hidden) {
                 paintAddons();
                 paintStorage();
+                paintPerf();
             }
         });
         document.addEventListener("click", function(e) {
@@ -3503,7 +3834,8 @@
             var full = per > 0 && left >= per;
             var wasted = idle(full);
             if (full) {
-                line.textContent = "FULL" + wasted;
+                // The site's line above already says ATTACKS FULL
+                line.textContent = wasted.replace(/^ · /, "");
                 line.title = "time today your attacks sat full, recharging nothing";
                 return;
             }
@@ -3743,7 +4075,7 @@
             st.items.unshift(it);
             if (st.items.length > MAX_ITEMS) st.items.length = MAX_ITEMS;
             save(KEY, st);
-            redraw();
+            idle("loot", redraw);
             if (rarity && RARITIES.indexOf(rarity.slice(2)) >= RARITIES.indexOf(notifyRarity())) {
                 notify("Loot: " + it.text.trim());
             }
@@ -3752,7 +4084,7 @@
         function watch() {
             var feed = document.getElementById("feed");
             if (!feed) return;
-            new MutationObserver(function(records) {
+            watcher(function(records) {
                 records.forEach(function(r) {
                     r.addedNodes.forEach(function(n) {
                         // Only fresh lines (.new), not history the feed loads when you scroll
@@ -3766,11 +4098,11 @@
 
         // Another tab added something (or reset it)
         window.addEventListener("storage", function(e) {
-            if (e.key === KEY) redraw();
-            if (e.key === CHESTS_KEY && !chestBox.hidden) paintChests();
+            if (e.key === KEY) idle("loot", redraw);
+            if (e.key === CHESTS_KEY && !chestBox.hidden) idle("chests", paintChests);
         });
         // The rates move with every attack, not only with loot
-        every(30000, function() { paintSummary(load()); }, { visible: true });
+        every(30000, function() { idle("loot-rates", function() { paintSummary(load()); }); }, { visible: true });
         redraw();
         watch();
     }
@@ -3851,7 +4183,7 @@
                     save(KEY, all.slice(0, MAX));
                 }
                 cur = null;
-                redraw();
+                idle("bosses", redraw);
             }
             if (!cur) cur = { seq: b.seq, name: b.name || "", start: now, end: now, mine: 0, all: 0, peak: 0, healed: 0, killed: false, events: {}, ph: {} };
             cur.end = now;
@@ -3883,9 +4215,9 @@
         }
 
         window.addEventListener("storage", function(e) {
-            if (e.key === KEY || e.key === GRAPHS_KEY) redraw();
+            if (e.key === KEY || e.key === GRAPHS_KEY) idle("bosses", redraw);
         });
-        document.addEventListener("omhp-graphs", redraw); // this tab kept a fight (graph.js)
+        document.addEventListener("omhp-graphs", function() { idle("bosses", redraw); }); // this tab kept a fight (graph.js)
         redraw();
         sample();
         every(5000, sample);
@@ -4021,7 +4353,7 @@
             x.addEventListener("click", function() { unpin(key); });
             var p = {
                 key: key, panel: panel, home: panel.nextSibling, slot: slot,
-                keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
+                keepShown: watcher(function() { if (panel.hidden) panel.hidden = false; })
             };
             var fold = document.createElement("button");
             fold.type = "button";
@@ -4330,7 +4662,7 @@
             var o = {
                 win: w.win, body: w.body, panel: panel, left: !!info, minBtn: w.minBtn, opInput: w.opInput,
                 home: { parent: panel.parentElement, next: panel.nextSibling },
-                keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
+                keepShown: watcher(function() { if (panel.hidden) panel.hidden = false; })
             };
             open[key] = o;
             w.body.appendChild(panel);
@@ -4468,7 +4800,7 @@
                 daily.title = "time to the next DAILY reward";
             }
         }
-        if (bridge) new MutationObserver(paintDaily).observe(bridge, { attributes: true, attributeFilter: ["data-daily"] });
+        if (bridge) watcher(paintDaily).observe(bridge, { attributes: true, attributeFilter: ["data-daily"] });
         every(30000, paintDaily);
         tick();
         every(15000, tick, { visible: true });
@@ -4491,7 +4823,7 @@
 
         var titleEl = document.querySelector("title");
         // The site rewrites the title on every update of your data: add ours back straight away
-        if (titleEl) new MutationObserver(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
+        if (titleEl) watcher(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
         every(5000, paint);
         paint();
     }
@@ -4519,13 +4851,18 @@
                 dms: dmCount()
             };
             if (last) {
-                if (now.full && !last.full) notify("Your attacks are full (" + key[0] + "/" + key[1] + ")");
+                // With the site's [FULL ALERT] on, it sends its own
+                if (now.full && !last.full && !siteFullAlert()) notify("Your attacks are full (" + key[0] + "/" + key[1] + ")");
                 if (now.seq !== null && last.seq !== null && now.seq !== last.seq) notify("A new boss is here: #" + now.seq);
                 else if (last.alive && now.alive === false) notify("Boss #" + now.seq + " is down");
                 if (now.fog !== last.fog) notify(now.fog ? "FOG has rolled in" : "The FOG has lifted");
                 if (now.dms > last.dms) notify("New message (" + now.dms + " unread)");
             }
             last = now;
+        }
+
+        function siteFullAlert() {
+            try { return localStorage.getItem("omhp.sound.full") === "on"; } catch (e) { return false; }
         }
 
         every(5000, check);
@@ -4756,7 +5093,8 @@
     }
     // Alt + key shortcuts (the site's own keys use no modifier, and it ignores Alt):
     // Alt+1..9 picks a tab in the right column, Alt+P pins, Alt+O pops out, Alt+T opens
-    // [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout.
+    // [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout. Esc leaves a
+    // text box.
     function shortcuts() {
         document.addEventListener("keydown", function(e) {
             if (!e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
@@ -4775,6 +5113,13 @@
             if (!btn || btn.disabled) return;
             e.preventDefault();
             btn.click();
+        });
+        // Esc leaves a text box (CHAT, DMs...), so Space and the site's other keys attack again. The
+        // chat's emote / name picker takes the first Esc itself (it marks the key handled).
+        document.addEventListener("keydown", function(e) {
+            var t = e.target;
+            if (e.key !== "Escape" || e.defaultPrevented || !t) return;
+            if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) t.blur();
         });
     }
 
@@ -4804,7 +5149,7 @@
         }
 
         lists.forEach(function(l) {
-            new MutationObserver(function(records) {
+            watcher(function(records) {
                 records.forEach(function(r) { r.addedNodes.forEach(apply); });
             }).observe(l, { childList: true });
         });
@@ -4861,7 +5206,7 @@
         }
 
         observeBatched(panel, { childList: true, subtree: true }, apply);
-        new MutationObserver(apply).observe(bridge, { attributes: true, attributeFilter: ["data-box-order"] });
+        watcher(apply).observe(bridge, { attributes: true, attributeFilter: ["data-box-order"] });
         apply();
     }
 
@@ -4879,8 +5224,10 @@
         function apply() {
             panel.classList.toggle("omhp-clan-folded", folded);
             var list = panel.querySelector(".clan-members");
+            // The heading, past the sort bar ([JOINED] [THIS WEEK] [ALL TIME]) the site puts under it
             var head = list && list.previousElementSibling;
-            if (!head || !head.classList.contains("panel-h")) return;
+            while (head && !head.classList.contains("panel-h")) head = head.previousElementSibling;
+            if (!head) return;
             var b = head.querySelector(".omhp-clan-fold");
             if (!b) {
                 b = document.createElement("button");
@@ -4901,6 +5248,226 @@
 
         observeBatched(panel, { childList: true, subtree: true }, apply);
         apply();
+    }
+
+
+    // TICKETS: [ HIDE VOTED ] hides the tickets you've +1'd or -1'd, to find the ones still waiting
+    // for your vote, and [ HIDE CLOSED ] the COMPLETED and SKIPPED ones (both remembered). The site
+    // rebuilds the filter row and the list on every redraw, so the buttons and the marks go back
+    // on after each one. It shows 30 at a time: while some are hidden, [ SHOW MORE ] is pressed
+    // until 30 are showing.
+    var TICKETS_VOTED_KEY = "omhp.layout.ticketsHideVoted";
+    var TICKETS_CLOSED_KEY = "omhp.layout.ticketsHideClosed";
+
+    function ticketFilters() {
+        var panel = document.getElementById("panel-tickets");
+        if (!panel) return;
+        var toggles = [
+            { key: TICKETS_VOTED_KEY, label: "HIDE VOTED", title: "hide the tickets you've voted on",
+                hides: function(card) { return !!card.querySelector(".ticket-vote.voted"); } },
+            { key: TICKETS_CLOSED_KEY, label: "HIDE CLOSED", title: "hide the COMPLETED and SKIPPED tickets",
+                hides: function(card) { return card.classList.contains("ticket-completed") || card.classList.contains("ticket-skipped"); } }
+        ];
+        toggles.forEach(function(t) { t.on = loadJSON(t.key, false) === true; });
+
+        function apply() {
+            var row = panel.querySelector(".ticket-filters");
+            if (!row) return;
+            var sorts = row.querySelector(".ticket-sorts");
+            toggles.forEach(function(t) {
+                var b = row.querySelector('[data-omhp-tk="' + t.key + '"]');
+                if (!b) {
+                    b = document.createElement("button");
+                    b.type = "button";
+                    b.className = "inline-btn ticket-filter";
+                    b.dataset.omhpTk = t.key;
+                    b.title = t.title;
+                    b.addEventListener("click", function() {
+                        t.on = !t.on;
+                        save(t.key, t.on);
+                        apply();
+                    });
+                    row.insertBefore(b, sorts);
+                }
+                var text = t.on ? "[x " + t.label + " ]" : "[ " + t.label + " ]";
+                if (b.textContent !== text) b.textContent = text;
+                b.setAttribute("aria-pressed", String(t.on));
+            });
+
+            var list = panel.querySelector(".ticket-list");
+            if (!list) return;
+            var showing = 0, hidden = 0;
+            list.querySelectorAll(":scope > .ticket").forEach(function(card) {
+                var hide = toggles.some(function(t) { return t.on && t.hides(card); });
+                if (card.classList.contains("omhp-tk-hide") !== hide) card.classList.toggle("omhp-tk-hide", hide);
+                if (hide) hidden++;
+                else showing++;
+            });
+            var more = list.querySelector(":scope > .ticket-more");
+            if (hidden && showing < 30 && more) {
+                more.click();
+                return;
+            }
+            var none = list.querySelector(":scope > .omhp-tk-none");
+            var text = hidden && !showing ? "> nothing left: every ticket here is " + toggles.filter(function(t) { return t.on; }).map(function(t) {
+                return t.key === TICKETS_VOTED_KEY ? "voted on" : "closed";
+            }).join(" or ") + "." : "";
+            if (text && !none) {
+                none = document.createElement("div");
+                none.className = "dim bag-note omhp-tk-none";
+                list.appendChild(none);
+            } else if (!text && none) {
+                none.remove();
+            }
+            if (none && text && none.textContent !== text) none.textContent = text;
+        }
+
+        observeBatched(panel, { childList: true, subtree: true }, apply);
+        onSetting(function(key) {
+            var t = toggles.find(function(x) { return x.key === key; });
+            if (!t) return;
+            t.on = loadJSON(t.key, false) === true;
+            apply();
+        });
+        apply();
+    }
+
+
+    // ACHIEVEMENTS: [ RAREST ] / [ MOST HAVE IT ] after the site's filters sort the cards by how
+    // many players have each one (its "N% OF PLAYERS HAVE THIS" line); the lit one again goes back
+    // to the site's order (remembered). The site redraws the whole panel, so the chips go back on
+    // after every redraw, and the order is set with CSS (the list is a grid), pinned ones first.
+    var ACH_SORT_KEY = "omhp.layout.achievementSort";
+
+    function achievementSort() {
+        var panel = document.getElementById("panel-achievements");
+        if (!panel) return;
+        var sortBy = loadJSON(ACH_SORT_KEY, null);
+        var CHIPS = [["rare", "RAREST", "fewest players have it first"], ["common", "MOST HAVE IT", "most players have it first"]];
+
+        function apply() {
+            var row = panel.querySelector(".achievement-filters");
+            if (row) {
+                CHIPS.forEach(function(c) {
+                    var b = row.querySelector('[data-omhp-ach="' + c[0] + '"]');
+                    if (!b) {
+                        b = document.createElement("button");
+                        b.type = "button";
+                        b.className = "chip omhp-ach-sort";
+                        b.dataset.omhpAch = c[0];
+                        b.textContent = "[ " + c[1] + " ]";
+                        b.addEventListener("click", function() {
+                            sortBy = sortBy === c[0] ? null : c[0];
+                            save(ACH_SORT_KEY, sortBy);
+                            apply();
+                        });
+                        row.appendChild(b);
+                    }
+                    var on = sortBy === c[0];
+                    if (b.classList.contains("on") !== on) b.classList.toggle("on", on);
+                    b.setAttribute("aria-pressed", String(on));
+                    b.title = on ? "back to the site's order" : c[2];
+                });
+            }
+            var cards = panel.querySelectorAll(".achievement-list > .achievement-card");
+            var place = sortBy ? achievementOrder(Array.prototype.map.call(cards, function(card) {
+                var line = card.querySelector(".achievement-rarity");
+                return { pinned: card.classList.contains("pinned"), pct: line ? achievementPct(line.textContent) : null };
+            }), sortBy) : null;
+            cards.forEach(function(card, i) {
+                var want = place ? String(place[i]) : "";
+                if (card.style.order !== want) card.style.order = want;
+            });
+        }
+
+        observeBatched(panel, { childList: true, subtree: true }, apply);
+        onSetting(function(key) {
+            if (key !== ACH_SORT_KEY) return;
+            sortBy = loadJSON(ACH_SORT_KEY, null);
+            apply();
+        });
+        apply();
+    }
+
+
+    // EFFECTS ([TOOLKIT]): the site's [FX] LOW turns everything down at once; these do one thing
+    // each, and theme the background mist. The site only draws the mist while its layer has
+    // .shown (and keeps the last frame when it stops), so:
+    //   OFF: .shown comes off, and nothing is drawn.
+    //   STILL: .shown stays on long enough for a frame, then comes off; .omhp-mist-held keeps
+    //     it on screen. It goes back on for a moment when the picture would change: the boss's
+    //     phase or colour, your theme or highlight colour, the window's size.
+    // Colour (SITE / THEME / HIGHLIGHT) and strength are CSS: the site draws in the layer's colour.
+    var applyEffects = function() {};
+
+    function effectToggles() {
+        var mist = document.getElementById("mist-bg");
+        var root = document.documentElement;
+        var revealed = !!(mist && mist.classList.contains("shown"));
+        var drawing = false, timer = 0, look = "";
+
+        // The mist's classes for the chosen mode
+        function settle() {
+            if (!mist || !revealed) return;
+            var bg = effectSettings().bg;
+            var held = bg === "still", shown = bg === "live" || (held && drawing);
+            if (mist.classList.contains("omhp-mist-held") !== held) mist.classList.toggle("omhp-mist-held", held);
+            if (mist.classList.contains("shown") !== shown) mist.classList.toggle("shown", shown);
+        }
+
+        // STILL: let the site draw for `ms`, then hold that frame
+        function redraw(ms) {
+            if (!mist || !revealed || effectSettings().bg !== "still") return;
+            clearTimeout(timer);
+            drawing = true;
+            timer = setTimeout(function() {
+                drawing = false;
+                settle();
+            }, ms);
+            settle();
+        }
+
+        applyEffects = function() {
+            var fx = effectSettings();
+            root.classList.toggle("omhp-mist-off", fx.bg === "off");
+            root.classList.toggle("omhp-mist-still", fx.bg === "still");
+            root.classList.toggle("omhp-mist-theme", fx.tint === "theme");
+            root.classList.toggle("omhp-mist-accent", fx.tint === "accent");
+            root.classList.toggle("omhp-mist-faint", fx.strength === "faint");
+            root.classList.toggle("omhp-mist-bright", fx.strength === "bright");
+            root.classList.toggle("omhp-no-scanlines", fx.scanlines);
+            root.classList.toggle("omhp-no-numbers", fx.numbers);
+            settle();
+            redraw(300);
+        };
+
+        if (mist) {
+            watcher(function() {
+                // The site shows the mist once the page is ready (after the name prompt): a still
+                // one gets a while to draw its first frame
+                if (!revealed && mist.classList.contains("shown")) {
+                    revealed = true;
+                    redraw(1500);
+                    settle();
+                    return;
+                }
+                // The site changed its colour (the boss's phase, its own tint)
+                var now = mist.className.replace(/\b(shown|omhp-mist-held)\b/g, "").trim() + "|" + mist.style.color;
+                if (now !== look) {
+                    look = now;
+                    redraw(300);
+                }
+                settle();
+            }).observe(mist, { attributes: true, attributeFilter: ["class", "style"] });
+            // Your theme or highlight colour (set on the page's root), and the window's size (the
+            // site's resize can clear the mist)
+            watcher(function() { redraw(300); }).observe(root, { attributes: true, attributeFilter: ["style"] });
+            window.addEventListener("resize", function() { redraw(300); });
+        }
+        onSetting(function(key) {
+            if (key === EFFECTS_KEY) applyEffects();
+        });
+        applyEffects();
     }
     // Features that couldn't start (the site changed) and page-script imports that failed,
     // shown as "⚠ 2 OFF" in the top bar so nothing disappears without a word.
@@ -4927,7 +5494,7 @@
             }
         }
 
-        if (bridge) new MutationObserver(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
+        if (bridge) watcher(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
         every(15000, function() { if (storageFull) paint(); });
         paint();
     }
@@ -4950,6 +5517,10 @@
             "features off: " + (FEATURES.filter(function(f) { return !isOn(f[0]); }).map(function(f) { return f[0]; }).join(", ") || "none"),
             "not started: " + (fails.join(", ") || "none"),
             "this tab records: " + (isLeader() ? "yes" : "no") + " · site data: " + (bridge && bridge.dataset.boss ? "yes" : "no"),
+            "perf (ms/min, calls/min): " + (perfTable().map(function(r) {
+                return r.name + " " + r.perMin.toFixed(1) + "/" + r.calls;
+            }).join(", ") || "none") + " · slowest " + perf.slow.ms.toFixed(1) + " ms (" + (perf.slow.name || "-") + ")",
+            "start-up ms: " + Object.keys(perf.start).map(function(k) { return k + " " + perf.start[k].toFixed(1); }).join(", "),
             "storage: " + ourStorage().map(function(x) { return x.key.replace(/^omhp\./, "") + " " + Math.round(x.size * 2 / 1024) + "K"; }).join(", ") +
                 (storageFull ? " (FULL)" : "")
         ].join("\n");
@@ -4959,22 +5530,23 @@
         function run(name, fn) {
             if (!isOn(name)) return;
             try {
-                if (fn() === false) broken.push(name.toUpperCase());
+                if (perfAs(name, fn) === false) broken.push(name.toUpperCase());
             } catch (e) {
                 broken.push(name.toUpperCase());
                 console.error("OMHP Toolkit:", name, e);
             }
         }
 
-        pinMain();
-        hoverTips();
-        paintAccount(); // always: it also publishes the boss data (see trueBoss)
+        perfAs("pin", pinMain);
+        perfAs("tips", hoverTips);
+        perfAs("page", paintAccount); // always: it also publishes the boss data (see trueBoss)
+        perfAs("account", accountGuard);
         run("graph", bossGraph);
         run("eta", bossEta);
         run("share", damageShare);
         run("session", sessionStats);
         run("full", attackTimer);
-        toolkitMenu();
+        perfAs("menu", toolkitMenu);
         run("clock", clock);
         run("flattabs", shortTabs);
         run("title", tabTitle);
@@ -4984,13 +5556,16 @@
         run("boxorder", bagBoxOrder);
         run("watch", auctionWatch);
         run("chatplus", chatPlus);
-        soundAlerts();
-        clanFold();
-        pinPanel();
-        floatingPanels();
+        perfAs("sounds", soundAlerts);
+        perfAs("clan", clanFold);
+        perfAs("tickets", ticketFilters);
+        perfAs("achievements", achievementSort);
+        perfAs("effects", effectToggles);
+        perfAs("pin", pinPanel);
+        perfAs("windows", floatingPanels);
         run("loot", lootLog);
         run("bosses", bossLog);
-        healthCheck();
+        perfAs("health", healthCheck);
         var columns = document.querySelector("#app .columns");
         if (!columns) return;
         for (var i = 0; i < SECTIONS.length; i++) {
@@ -5026,7 +5601,7 @@
 
         // The site's tab code hides these panels whenever another tab is picked;
         // keep them showing so the site also treats them as open.
-        var keepShown = new MutationObserver(function() {
+        var keepShown = watcher(function() {
             panels.forEach(function(p) { if (p.hidden) p.hidden = false; });
             fixRightPanel();
         });

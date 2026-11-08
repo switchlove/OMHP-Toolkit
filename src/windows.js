@@ -232,7 +232,7 @@ function floatingPanels() {
         var o = {
             win: w.win, body: w.body, panel: panel, left: !!info, minBtn: w.minBtn, opInput: w.opInput,
             home: { parent: panel.parentElement, next: panel.nextSibling },
-            keepShown: new MutationObserver(function() { if (panel.hidden) panel.hidden = false; })
+            keepShown: watcher(function() { if (panel.hidden) panel.hidden = false; })
         };
         open[key] = o;
         w.body.appendChild(panel);

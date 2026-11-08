@@ -24,7 +24,7 @@ function lineFilters() {
     }
 
     lists.forEach(function(l) {
-        new MutationObserver(function(records) {
+        watcher(function(records) {
             records.forEach(function(r) { r.addedNodes.forEach(apply); });
         }).observe(l, { childList: true });
     });

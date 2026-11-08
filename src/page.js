@@ -47,7 +47,7 @@ function paintAccount() {
                 // The running world event, with its times in this computer's clock (the site's are
                 // the server's, in seconds); id tells one event from the next
                 const localEvent = (ev) => ev && ev.kind ? {
-                    kind: ev.kind, stage: ev.stage ?? null, name: ev.name ?? null, id: ev.started_at ?? null,
+                    kind: ev.kind, stage: ev.stage ?? null, name: ev.name ?? null, id: ev.started_at ?? null, round: ev.round ?? null,
                     until: ev.until ? Math.round(Date.now() + (ev.until - store.now()) * 1000) : null
                 } : null;
                 const publish = () => {
@@ -66,7 +66,7 @@ function paintAccount() {
                 const publishMe = () => {
                     const m = store.state.me;
                     if (!out || !m || typeof m.total_damage !== "number") return;
-                    out.dataset.me = JSON.stringify({ dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards });
+                    out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length });
                     // The order SHOP lists its loot boxes in (see bagBoxOrder)
                     const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                     if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;

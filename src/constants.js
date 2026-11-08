@@ -9,11 +9,12 @@ var SECTIONS = [
 var ORDER_KEY = "omhp.layout.order";
 var THEME_KEY = "omhp.layout.theme";
 var PIN_KEY = "omhp.layout.pinned";
+// Each theme's colours; mist is the background mist's (with [TOOLKIT] > MIST > THEME)
 var THEMES = [
     { name: "TERMINAL", vars: null }, // the site's own colours
-    { name: "MIDNIGHT", vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550" } },
-    { name: "PHOSPHOR", vars: { bg: "#040904", "bg-2": "#0a140a", fg: "#b6ffb0", dim: "#5f9a5a", faint: "#1f3a1f" } },
-    { name: "PAPER", vars: { bg: "#f4efe2", "bg-2": "#e9e2d0", fg: "#2a2620", dim: "#6e665a", faint: "#c9c0ab" } }
+    { name: "MIDNIGHT", vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550", mist: "#6a7fb4" } },
+    { name: "PHOSPHOR", vars: { bg: "#040904", "bg-2": "#0a140a", fg: "#b6ffb0", dim: "#5f9a5a", faint: "#1f3a1f", mist: "#58b852" } },
+    { name: "PAPER", vars: { bg: "#f4efe2", "bg-2": "#e9e2d0", fg: "#2a2620", dim: "#6e665a", faint: "#c9c0ab", mist: "#8c826e" } }
 ];
 var STORE_KEY = "omhp.layout.collapsed";
 var HEIGHTS_KEY = "omhp.layout.heights";

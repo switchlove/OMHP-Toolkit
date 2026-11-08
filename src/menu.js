@@ -93,6 +93,8 @@ function toolkitMenu() {
             var c = cs.getPropertyValue("--" + v).trim().toLowerCase();
             out[v] = /^#[0-9a-f]{6}$/.test(c) ? c : "#000000";
         });
+        var mist = cs.getPropertyValue("--omhp-mist").trim().toLowerCase();
+        out.mist = /^#[0-9a-f]{6}$/.test(mist) ? mist : "#b9b4a4"; // the site's own mist
         return out;
     }
 
@@ -100,11 +102,12 @@ function toolkitMenu() {
     // SHARE to copy its code, USE CODE to apply someone else's
     var customBody = row("CUSTOM", []);
     var customRow = customBody.parentElement;
-    var pickers = THEME_VARS.map(function(v) {
+    var CUSTOM_VARS = THEME_VARS.concat(["mist"]);
+    var pickers = CUSTOM_VARS.map(function(v) {
         var label = el("label", "omhp-custom-pick");
         var input = el("input");
         input.type = "color";
-        input.title = "the theme's " + v + " colour";
+        input.title = v === "mist" ? "the background mist's colour (with MIST: THEME)" : "the theme's " + v + " colour";
         input.addEventListener("input", function() {
             var vars = loadSaved(CUSTOM_THEME_KEY);
             vars[v] = input.value;
@@ -145,7 +148,7 @@ function toolkitMenu() {
         customRow.hidden = currentTheme !== "CUSTOM";
         var vars = loadSaved(CUSTOM_THEME_KEY);
         pickers.forEach(function(input, i) {
-            var c = vars[THEME_VARS[i]];
+            var c = vars[CUSTOM_VARS[i]];
             if (c && input.value !== c) input.value = c;
         });
     }
@@ -202,7 +205,43 @@ function toolkitMenu() {
         return b;
     });
     row("SOUNDS", soundBtns);
-    if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
+
+    // BACKGROUND / MIST / EFFECTS: how the background mist moves, its colour and strength, and
+    // parts of the site's effects to switch off on their own (all apply at once)
+    var fxPaints = [];
+    function paintFx() {
+        fxPaints.forEach(function(f) { f(); });
+    }
+    function setFx(field, value) {
+        var all = loadSaved(EFFECTS_KEY);
+        all[field] = value;
+        save(EFFECTS_KEY, all);
+        paintFx();
+        applyEffects();
+    }
+    function fxPick(field, options) {
+        var btns = options.map(function(o) {
+            return choice(o[1], effectSettings()[field] === o[0], o[2], function() { setFx(field, o[0]); });
+        });
+        fxPaints.push(function() {
+            btns.forEach(function(b, i) { b.classList.toggle("on", effectSettings()[field] === options[i][0]); });
+        });
+        return btns;
+    }
+    var fxSwitches = EFFECT_SWITCHES.map(function(f) {
+        var b = choice(f[1], effectSettings()[f[0]], f[2], function() { setFx(f[0], !effectSettings()[f[0]]); });
+        b.classList.add("omhp-check");
+        fxPaints.push(function() {
+            b.classList.toggle("on", effectSettings()[f[0]]);
+            b.setAttribute("aria-pressed", String(effectSettings()[f[0]]));
+        });
+        return b;
+    });
+    row("BACKGROUND", fxPick("bg", MIST_MODES));
+    row("MIST", fxPick("tint", MIST_TINTS).concat([el("span", "omhp-menu-hint", "·")], fxPick("strength", MIST_STRENGTHS)));
+    row("EFFECTS", fxSwitches);
+    paintFx();
+    if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu · Esc leaves a text box")]);
 
     // Other userscripts this one knows, checked each time the menu opens
     var addons = el("span", "omhp-menu-hint");
@@ -316,13 +355,39 @@ function toolkitMenu() {
 
     // What the toolkit keeps in this browser; CLEAN UP makes it smaller
     var storageNote = el("span", "omhp-menu-hint");
+    var dropOthers = choice("", false, "delete the stats kept for the other accounts that played in this browser", function() {
+        var keys = otherAccounts();
+        if (!keys.length || !confirm("Delete the saved stats of " + keys.length + " other account" + (keys.length === 1 ? "" : "s") + "?")) return;
+        keys.forEach(function(k) {
+            try { localStorage.removeItem(k); } catch (e) { /* ignore */ }
+        });
+        paintStorage();
+    });
     row("STORAGE", [storageNote, choice("CLEAN UP", false, "keep only the last 5 boss graphs and 50 loot lines", function() {
         cleanUp(5);
         paintStorage();
-    })]);
+    }), dropOthers]);
     function paintStorage() {
         var used = ourStorage().reduce(function(n, x) { return n + x.size; }, 0);
         storageNote.textContent = Math.round(used * 2 / 1024) + " KB" + (storageFull ? " · FULL" : "");
+        var others = otherAccounts().length;
+        dropOthers.hidden = !others;
+        dropOthers.textContent = "DROP " + others + " OTHER ACCOUNT" + (others === 1 ? "" : "S");
+    }
+
+    // PERF: which features take the most time (their watchers and timers), to find lag
+    var perfNote = el("span", "omhp-menu-hint");
+    var perfRow = row("PERF", [perfNote, choice("[RESET]", false, "start counting again from now", function() {
+        perfReset();
+        paintPerf();
+    })]);
+    setTip(perfRow.parentElement, "milliseconds per minute each feature spends on its watchers and timers, over the last 5 minutes. A few ms is nothing; hundreds means it's slowing the page.");
+    function paintPerf() {
+        var top = perfTable().slice(0, 5);
+        perfNote.textContent = top.length
+            ? top.map(function(r) { return perfLabel(r.name) + " " + r.perMin.toFixed(1); }).join(" · ") + " ms/min" +
+                (perf.slow.ms >= 1 ? " · slowest " + Math.round(perf.slow.ms) + " ms (" + perfLabel(perf.slow.name) + ")" : "")
+            : "nothing yet";
     }
 
     // COPY DEBUG: details to paste into a GitHub issue when something's wrong
@@ -349,6 +414,7 @@ function toolkitMenu() {
         if (key === SOUNDS_KEY) {
             soundBtns.forEach(function(b, i) { b.classList.toggle("on", !!loadSaved(SOUNDS_KEY)[SOUND_NAMES[i][0]]); });
         }
+        if (key === EFFECTS_KEY) paintFx();
         if (key === FEATURES_KEY) {
             featBtns.forEach(function(b, i) {
                 b.classList.toggle("on", isOn(FEATURES[i][0]));
@@ -364,6 +430,7 @@ function toolkitMenu() {
         if (!pop.hidden) {
             paintAddons();
             paintStorage();
+            paintPerf();
         }
     });
     document.addEventListener("click", function(e) {

@@ -16,6 +16,7 @@ const OUT = path.join(__dirname, "omhp-toolkit.user.js");
 // function declarations, which moveSections() (main.js, last) starts once the page is ready.
 const PARTS = [
     "constants.js",
+    "version.js",
     "lib.js",
     "style.css",
     "core.js",
@@ -52,10 +53,12 @@ function indent(text, by) {
 }
 
 function build() {
-    var out = read("header.js") + "(function() {\n";
+    var header = read("header.js");
+    var version = header.match(/^\/\/ @version\s+(\S+)/m)[1]; // version.js logs it
+    var out = header + "(function() {\n";
     PARTS.forEach(function(name) {
         if (name.endsWith(".css")) out += "    var css = `\n" + indent(read(name), "        ") + "    `;\n";
-        else out += indent(read(name), "    ");
+        else out += indent(read(name).replace("__VERSION__", version), "    ");
     });
     return out + "})();\n";
 }

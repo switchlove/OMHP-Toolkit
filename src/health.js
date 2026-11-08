@@ -23,7 +23,7 @@ function healthCheck() {
         }
     }
 
-    if (bridge) new MutationObserver(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
+    if (bridge) watcher(paint).observe(bridge, { attributes: true, attributeFilter: ["data-fail"] });
     every(15000, function() { if (storageFull) paint(); });
     paint();
 }
@@ -46,6 +46,10 @@ function debugReport() {
         "features off: " + (FEATURES.filter(function(f) { return !isOn(f[0]); }).map(function(f) { return f[0]; }).join(", ") || "none"),
         "not started: " + (fails.join(", ") || "none"),
         "this tab records: " + (isLeader() ? "yes" : "no") + " · site data: " + (bridge && bridge.dataset.boss ? "yes" : "no"),
+        "perf (ms/min, calls/min): " + (perfTable().map(function(r) {
+            return r.name + " " + r.perMin.toFixed(1) + "/" + r.calls;
+        }).join(", ") || "none") + " · slowest " + perf.slow.ms.toFixed(1) + " ms (" + (perf.slow.name || "-") + ")",
+        "start-up ms: " + Object.keys(perf.start).map(function(k) { return k + " " + perf.start[k].toFixed(1); }).join(", "),
         "storage: " + ourStorage().map(function(x) { return x.key.replace(/^omhp\./, "") + " " + Math.round(x.size * 2 / 1024) + "K"; }).join(", ") +
             (storageFull ? " (FULL)" : "")
     ].join("\n");

@@ -220,7 +220,7 @@ function lootLog() {
         st.items.unshift(it);
         if (st.items.length > MAX_ITEMS) st.items.length = MAX_ITEMS;
         save(KEY, st);
-        redraw();
+        idle("loot", redraw);
         if (rarity && RARITIES.indexOf(rarity.slice(2)) >= RARITIES.indexOf(notifyRarity())) {
             notify("Loot: " + it.text.trim());
         }
@@ -229,7 +229,7 @@ function lootLog() {
     function watch() {
         var feed = document.getElementById("feed");
         if (!feed) return;
-        new MutationObserver(function(records) {
+        watcher(function(records) {
             records.forEach(function(r) {
                 r.addedNodes.forEach(function(n) {
                     // Only fresh lines (.new), not history the feed loads when you scroll
@@ -243,11 +243,11 @@ function lootLog() {
 
     // Another tab added something (or reset it)
     window.addEventListener("storage", function(e) {
-        if (e.key === KEY) redraw();
-        if (e.key === CHESTS_KEY && !chestBox.hidden) paintChests();
+        if (e.key === KEY) idle("loot", redraw);
+        if (e.key === CHESTS_KEY && !chestBox.hidden) idle("chests", paintChests);
     });
     // The rates move with every attack, not only with loot
-    every(30000, function() { paintSummary(load()); }, { visible: true });
+    every(30000, function() { idle("loot-rates", function() { paintSummary(load()); }); }, { visible: true });
     redraw();
     watch();
 }

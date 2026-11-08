@@ -7,7 +7,8 @@
     "build": "node build.js",
     "check": "node build.js --check && node --check omhp-toolkit.user.js",
     "test": "node --test",
-    "lint": "eslint --max-warnings 0 omhp-toolkit.user.js build.js test"
+    "lint": "eslint --max-warnings 0 omhp-toolkit.user.js build.js test tools",
+    "canary": "node tools/canary.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

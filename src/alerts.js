@@ -15,7 +15,7 @@ function tabTitle() {
 
     var titleEl = document.querySelector("title");
     // The site rewrites the title on every update of your data: add ours back straight away
-    if (titleEl) new MutationObserver(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
+    if (titleEl) watcher(paint).observe(titleEl, { childList: true, characterData: true, subtree: true });
     every(5000, paint);
     paint();
 }
@@ -43,13 +43,18 @@ function notifier() {
             dms: dmCount()
         };
         if (last) {
-            if (now.full && !last.full) notify("Your attacks are full (" + key[0] + "/" + key[1] + ")");
+            // With the site's [FULL ALERT] on, it sends its own
+            if (now.full && !last.full && !siteFullAlert()) notify("Your attacks are full (" + key[0] + "/" + key[1] + ")");
             if (now.seq !== null && last.seq !== null && now.seq !== last.seq) notify("A new boss is here: #" + now.seq);
             else if (last.alive && now.alive === false) notify("Boss #" + now.seq + " is down");
             if (now.fog !== last.fog) notify(now.fog ? "FOG has rolled in" : "The FOG has lifted");
             if (now.dms > last.dms) notify("New message (" + now.dms + " unread)");
         }
         last = now;
+    }
+
+    function siteFullAlert() {
+        try { return localStorage.getItem("omhp.sound.full") === "on"; } catch (e) { return false; }
     }
 
     every(5000, check);

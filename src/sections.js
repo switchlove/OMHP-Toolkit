@@ -172,6 +172,16 @@ function buildSection(info, collapsed, heights) {
 
     section.appendChild(head);
     section.appendChild(panel);
+    // The site can float the CHAT itself (its [ POP OUT ], hidden here), which would leave
+    // this section empty: dock it with the site's own button if it was popped out before
+    if (info.key === "chat") {
+        var dock = function() {
+            var b = panel.querySelector(".chat-pop-btn:not(.chat-min-btn)");
+            if (panel.classList.contains("chat-popped") && b) b.click();
+        };
+        watcher(dock).observe(panel, { attributes: true, attributeFilter: ["class"] });
+        dock();
+    }
     if (scroller) section.appendChild(makeResizer(info, scroller, heights));
     paint();
     return section;

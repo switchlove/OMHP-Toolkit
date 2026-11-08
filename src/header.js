@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.33
+// @version      0.35
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -30,7 +30,9 @@
 //     opens it in a floating window.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
-//     MEMBERS list folds away with [-] / [+] on its heading.
+//     MEMBERS list folds away with [-] / [+] on its heading. TICKETS gets [ HIDE VOTED ] (only
+//     the tickets you haven't voted on yet) and [ HIDE CLOSED ]. ACHIEVEMENTS gets [ RAREST ]
+//     and [ MOST HAVE IT ], to sort by how many players have each one.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -62,19 +64,21 @@
 //     by phase on hover (BOSSES lists each boss's events and phases too).
 //     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
-//     your attacks sat full, recharging nothing.
+//     your attacks sat full, recharging nothing (under the site's ATTACKS FULL).
 //   - LOOT: what you found today, counted by rarity with drops per 100 attacks (kept like
 //     SESSION, with [RESET]; hover for the last 30 days). [CHESTS] compares what your
 //     box openings gave with the site's stated odds.
 //
 // TOP BAR
 //   - [TOOLKIT]: highlight colour, themes (TERMINAL, MIDNIGHT, PHOSPHOR, PAPER, or your
-//     own CUSTOM colours, shareable as a code), FEATURES
-//     to switch parts of this script on or off (applies on reload), the loot alert
-//     rarity, the shortcut keys, add-ons it found, saved LAYOUTs, EXPORT / IMPORT
-//     of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it)
-//     and COPY DEBUG (details for a bug report). Settings changed in one tab apply in
-//     your other open tabs at once.
+//     own CUSTOM colours, shareable as a code), the background mist (LIVE, STILL or OFF;
+//     the site's colours, the theme's or your highlight colour; FAINT to BRIGHT), EFFECTS
+//     (NO SCANLINES, NO DAMAGE NUMBERS), FEATURES to switch parts of this script on or off
+//     (applies on reload), the loot alert rarity, the shortcut keys, add-ons it found,
+//     saved LAYOUTs, EXPORT / IMPORT of everything as a backup file, STORAGE (how much it keeps, CLEAN UP to trim it),
+//     PERF (which features take the most time, to track down lag) and COPY DEBUG
+//     (details for a bug report). Settings changed in one tab apply in your other open
+//     tabs at once. Stats are kept per account: log in as someone else and theirs swap in.
 //   - Local time, how long the page has been open, and the next DAILY reward (READY when
 //     it's waiting; NOTIFY reminds you once a day).
 //   - The account button shows your badges and name instead of [LOGIN].
@@ -82,7 +86,7 @@
 //
 // MORE
 //   - Alt shortcuts: Alt+1..9 picks a right-column tab, Alt+P pins, Alt+O pops out,
-//     Alt+T opens [TOOLKIT].
+//     Alt+T opens [TOOLKIT]. Esc leaves a text box, so the site's keys attack again.
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
 //   - AUCTION WATCH: [+ THIS SEARCH] above the auction house watches your last search with a

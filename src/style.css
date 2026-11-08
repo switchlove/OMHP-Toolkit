@@ -104,7 +104,14 @@ html.omhp-flattabs #tabs .tab-submenu, html.omhp-flattabs #tabs .tab-submenu[hid
 /* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
 html.omhp-flattabs #tabs { position: relative; }
 html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; z-index: 31; white-space: nowrap; }
-html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
+html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group .tab-menu,
+html.omhp-flattabs #tabs .tab-group[data-group="feed"] + .tab-group[hidden] + .tab-group .tab-menu { padding-inline: var(--omhp-tools, 0); }
+/* A section with nothing unlocked stays hidden (display: contents above would show it) */
+html.omhp-flattabs #tabs .tab-group[hidden] { display: none; }
+/* [EVENTS]: the event's countdown sits in the line next to CITY, at the bar's size */
+html.omhp-flattabs #tabs .limited-timer { padding: 0 4px; margin: 0; border: 0; font-size: 11px; }
+/* CHAT in the left column: the site's own pop-out would leave its section empty (it has POP OUT) */
+.left-section #panel-chat .chat-pop-btn { display: none; }
 
 /* Boss kill ETA, HP sparkline, session damage, attacks-full timer */
 #omhp-eta { font-size: 12px; letter-spacing: .08em; margin-top: 2px; }
@@ -320,9 +327,25 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
 
 /* CLAN: the MEMBERS list folds away (see clanFold) */
-#panel-clan.omhp-clan-folded .clan-members { display: none; }
+#panel-clan.omhp-clan-folded .clan-members, #panel-clan.omhp-clan-folded .clan-sort { display: none; }
 .omhp-clan-fold { font: inherit; color: var(--dim); padding: 0; }
 .omhp-clan-fold:hover { color: var(--fg); }
+
+/* TICKETS: [ HIDE VOTED ] [ HIDE CLOSED ] (see ticketFilters) */
+#panel-tickets .ticket.omhp-tk-hide { display: none; }
+
+/* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
+   no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */
+html.omhp-mist-off #mist-bg { display: none; }
+#mist-bg.omhp-mist-held { opacity: .42; }
+html.omhp-mist-faint #mist-bg.shown, html.omhp-mist-faint #mist-bg.omhp-mist-held { opacity: .2; }
+html.omhp-mist-bright #mist-bg.shown, html.omhp-mist-bright #mist-bg.omhp-mist-held { opacity: .65; }
+/* No colour fade while STILL: the frame drawn after a phase change has the new colour */
+html.omhp-mist-still #mist-bg { transition: opacity 2s ease-out; }
+html.omhp-mist-theme #mist-bg { color: var(--omhp-mist, #b9b4a4) !important; }
+html.omhp-mist-accent #mist-bg { color: var(--amber) !important; }
+html.omhp-no-scanlines .crt { display: none; }
+html.omhp-no-numbers #popups .pop.seg { display: none; }
 
 /* BAG: smaller loot-box cards so more fit across the right column */
 .col-side .box-row, .omhp-float .box-row { gap: 6px; }

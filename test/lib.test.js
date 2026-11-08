@@ -136,6 +136,11 @@ test("themeCode and parseThemeCode round-trip", () => {
     same(lib.parseThemeCode(" " + code + " "), {
         vars: { bg: "#0b1020", "bg-2": "#121a30", fg: "#dfe6f5", dim: "#7f8aa6", faint: "#2c3550" }, accent: "#ffb000"
     });
+    // With the mist colour as a seventh
+    const misty = lib.themeCode(Object.assign({ mist: "#6A7FB4" }, vars), "#ffb000");
+    assert.equal(misty, code + "-6a7fb4");
+    assert.equal(lib.parseThemeCode(misty).vars.mist, "#6a7fb4");
+    assert.equal(lib.parseThemeCode(code).vars.mist, undefined);
     assert.equal(lib.parseThemeCode("OMHP1-0b1020-121a30"), null);
     assert.equal(lib.parseThemeCode("hello"), null);
     assert.equal(lib.parseThemeCode(null), null);
@@ -199,10 +204,34 @@ test("titleWith: a FOG countdown is replaced too", () => {
     assert.equal(lib.titleWith("(3/5) [72% ~39m · MERCHANT 1:42] ONE MILLION HP", ""), "(3/5) ONE MILLION HP");
 });
 
+test("achievementPct", () => {
+    assert.equal(lib.achievementPct("12.5% OF PLAYERS HAVE THIS"), 12.5);
+    assert.equal(lib.achievementPct("64% OF PLAYERS HAVE THIS"), 64);
+    assert.equal(lib.achievementPct("UNDER 0.1% OF PLAYERS HAVE THIS"), 0.05);
+    assert.equal(lib.achievementPct("NOBODY HAS THIS YET"), 0);
+    assert.equal(lib.achievementPct(""), null);
+    assert.equal(lib.achievementPct(null), null);
+});
+
+test("achievementOrder", () => {
+    const items = [
+        { pinned: false, pct: 40 }, { pinned: true, pct: 90 }, { pinned: false, pct: null },
+        { pinned: false, pct: 2 }, { pinned: false, pct: 40 }, { pinned: true, pct: 1 }
+    ];
+    // rarest: the pins (1, 5), then 2%, 40%, 40% (site order), then the secret
+    same(lib.achievementOrder(items, "rare"), [3, 0, 5, 2, 4, 1]);
+    // most have it: the pins, then 40%, 40%, 2%, then the secret
+    same(lib.achievementOrder(items, "common"), [2, 0, 5, 4, 3, 1]);
+});
+
 test("eventLabel", () => {
     assert.equal(lib.eventLabel("merchant"), "MERCHANT");
     assert.equal(lib.eventLabel("laststand"), "LAST STAND");
     assert.equal(lib.eventLabel("big_deal"), "BIG DEAL");
+    assert.equal(lib.eventLabel("second_wind"), "2ND WIND");
+    assert.equal(lib.eventLabel("second_wind", 2), "2ND WIND");
+    assert.equal(lib.eventLabel("second_wind", 3), "3RD WIND");
+    assert.equal(lib.eventLabel("second_wind", 4), "4TH WIND");
 });
 
 test("clockDur", () => {

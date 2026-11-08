@@ -43,7 +43,7 @@ function clock() {
             daily.title = "time to the next DAILY reward";
         }
     }
-    if (bridge) new MutationObserver(paintDaily).observe(bridge, { attributes: true, attributeFilter: ["data-daily"] });
+    if (bridge) watcher(paintDaily).observe(bridge, { attributes: true, attributeFilter: ["data-daily"] });
     every(30000, paintDaily);
     tick();
     every(15000, tick, { visible: true });

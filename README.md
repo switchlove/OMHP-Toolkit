@@ -22,9 +22,9 @@ The full guide to every feature is in the **[wiki](https://github.com/switchlove
 - **[Fight](https://github.com/switchlove/OMHP-Toolkit/wiki/Fight)**: your share of the damage, today's SESSION stats with the last 14 days and your all-time records, FULL IN and IDLE timers, and a LOOT log with drop rates and chest odds.
 - **[Shortcuts and filters](https://github.com/switchlove/OMHP-Toolkit/wiki/Shortcuts-and-Filters)**: Alt shortcuts, hide or highlight lines in ATTACKS and CHAT, AUCTION WATCH, chat replies, player hover cards and a compact mode.
 - **[Alerts](https://github.com/switchlove/OMHP-Toolkit/wiki/Alerts)**: the boss's HP and kill estimate in the tab title, desktop notifications and sounds.
-- **[Toolkit menu](https://github.com/switchlove/OMHP-Toolkit/wiki/Toolkit-Menu)**: colours and themes (shareable as a code), features on and off, saved layouts, backups, storage and a debug report. The top bar also gets a clock and the next DAILY reward.
+- **[Toolkit menu](https://github.com/switchlove/OMHP-Toolkit/wiki/Toolkit-Menu)**: colours and themes (shareable as a code), features on and off, background mist and effect settings, saved layouts, backups, storage, a PERF meter and a debug report. The top bar also gets a clock and the next DAILY reward.
 
-Everything it keeps stays in your browser; see [Saved Data](https://github.com/switchlove/OMHP-Toolkit/wiki/Saved-Data). Something not working? See [Troubleshooting](https://github.com/switchlove/OMHP-Toolkit/wiki/Troubleshooting).
+Stats are kept per account, and everything it keeps stays in your browser; see [Saved Data](https://github.com/switchlove/OMHP-Toolkit/wiki/Saved-Data). Something not working? See [Troubleshooting](https://github.com/switchlove/OMHP-Toolkit/wiki/Troubleshooting).
 
 ## Notes
 
@@ -42,9 +42,12 @@ The userscript is built from the files in `src/`; don't edit `omhp-toolkit.user.
 npm install      # once: the lint tools
 npm run build    # write omhp-toolkit.user.js from src/
 npm test         # the tests
-npm run lint     # eslint on the built script, the build script and the tests
+npm run lint     # eslint on the built script, the build script, the tests and tools/
 npm run check    # is the built script up to date, and does it parse?
+npm run canary   # does the live site still have everything the toolkit uses? and what's new in its changelog
 ```
+
+`tools/canary.js` reads the site's files as text (it never runs them). The **Site canary** workflow runs it every day: each new day in the game's changelog becomes a "Game update" issue, and anything the toolkit uses that's gone opens a "Site drift" issue.
 
 ## Releasing
 
