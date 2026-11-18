@@ -64,142 +64,65 @@ function clanFold() {
 }
 
 
-// TICKETS: [ HIDE VOTED ] hides the tickets you've +1'd or -1'd, to find the ones still waiting
-// for your vote, and [ HIDE CLOSED ] the COMPLETED and SKIPPED ones (both remembered). The site
-// rebuilds the filter row and the list on every redraw, so the buttons and the marks go back
-// on after each one. It shows 30 at a time: while some are hidden, [ SHOW MORE ] is pressed
-// until 30 are showing.
-var TICKETS_VOTED_KEY = "omhp.layout.ticketsHideVoted";
-var TICKETS_CLOSED_KEY = "omhp.layout.ticketsHideClosed";
+// ASCII BOSS FORGE: [-] / [+] on YOUR SUBMISSIONS and YOUR BOSSES folds each list away
+// (remembered). The site builds the page the first time it's opened, and redraws each box's
+// heading and rows together, so the button goes back on after every redraw and the rows are
+// hidden with a class on the box, which the redraws leave alone.
+var FORGE_FOLD_KEY = "omhp.layout.forgeFold";
 
-function ticketFilters() {
-    var panel = document.getElementById("panel-tickets");
+function forgeFold() {
+    var panel = document.getElementById("panel-designer");
     if (!panel) return;
-    var toggles = [
-        { key: TICKETS_VOTED_KEY, label: "HIDE VOTED", title: "hide the tickets you've voted on",
-            hides: function(card) { return !!card.querySelector(".ticket-vote.voted"); } },
-        { key: TICKETS_CLOSED_KEY, label: "HIDE CLOSED", title: "hide the COMPLETED and SKIPPED tickets",
-            hides: function(card) { return card.classList.contains("ticket-completed") || card.classList.contains("ticket-skipped"); } }
-    ];
-    toggles.forEach(function(t) { t.on = loadJSON(t.key, false) === true; });
+    var BOXES = [["design-submissions", "submissions", "your submissions"], ["design-my-bosses", "bosses", "your bosses"]];
+    var folds = loadSaved(FORGE_FOLD_KEY);
+    var watched = {};
 
-    function apply() {
-        var row = panel.querySelector(".ticket-filters");
-        if (!row) return;
-        var sorts = row.querySelector(".ticket-sorts");
-        toggles.forEach(function(t) {
-            var b = row.querySelector('[data-omhp-tk="' + t.key + '"]');
-            if (!b) {
-                b = document.createElement("button");
-                b.type = "button";
-                b.className = "inline-btn ticket-filter";
-                b.dataset.omhpTk = t.key;
-                b.title = t.title;
-                b.addEventListener("click", function() {
-                    t.on = !t.on;
-                    save(t.key, t.on);
-                    apply();
-                });
-                row.insertBefore(b, sorts);
-            }
-            var text = t.on ? "[x " + t.label + " ]" : "[ " + t.label + " ]";
-            if (b.textContent !== text) b.textContent = text;
-            b.setAttribute("aria-pressed", String(t.on));
-        });
-
-        var list = panel.querySelector(".ticket-list");
-        if (!list) return;
-        var showing = 0, hidden = 0;
-        list.querySelectorAll(":scope > .ticket").forEach(function(card) {
-            var hide = toggles.some(function(t) { return t.on && t.hides(card); });
-            if (card.classList.contains("omhp-tk-hide") !== hide) card.classList.toggle("omhp-tk-hide", hide);
-            if (hide) hidden++;
-            else showing++;
-        });
-        var more = list.querySelector(":scope > .ticket-more");
-        if (hidden && showing < 30 && more) {
-            more.click();
-            return;
-        }
-        var none = list.querySelector(":scope > .omhp-tk-none");
-        var text = hidden && !showing ? "> nothing left: every ticket here is " + toggles.filter(function(t) { return t.on; }).map(function(t) {
-            return t.key === TICKETS_VOTED_KEY ? "voted on" : "closed";
-        }).join(" or ") + "." : "";
-        if (text && !none) {
-            none = document.createElement("div");
-            none.className = "dim bag-note omhp-tk-none";
-            list.appendChild(none);
-        } else if (!text && none) {
-            none.remove();
-        }
-        if (none && text && none.textContent !== text) none.textContent = text;
-    }
-
-    observeBatched(panel, { childList: true, subtree: true }, apply);
-    onSetting(function(key) {
-        var t = toggles.find(function(x) { return x.key === key; });
-        if (!t) return;
-        t.on = loadJSON(t.key, false) === true;
-        apply();
-    });
-    apply();
-}
-
-
-// ACHIEVEMENTS: [ RAREST ] / [ MOST HAVE IT ] after the site's filters sort the cards by how
-// many players have each one (its "N% OF PLAYERS HAVE THIS" line); the lit one again goes back
-// to the site's order (remembered). The site redraws the whole panel, so the chips go back on
-// after every redraw, and the order is set with CSS (the list is a grid), pinned ones first.
-var ACH_SORT_KEY = "omhp.layout.achievementSort";
-
-function achievementSort() {
-    var panel = document.getElementById("panel-achievements");
-    if (!panel) return;
-    var sortBy = loadJSON(ACH_SORT_KEY, null);
-    var CHIPS = [["rare", "RAREST", "fewest players have it first"], ["common", "MOST HAVE IT", "most players have it first"]];
-
-    function apply() {
-        var row = panel.querySelector(".achievement-filters");
-        if (row) {
-            CHIPS.forEach(function(c) {
-                var b = row.querySelector('[data-omhp-ach="' + c[0] + '"]');
-                if (!b) {
-                    b = document.createElement("button");
-                    b.type = "button";
-                    b.className = "chip omhp-ach-sort";
-                    b.dataset.omhpAch = c[0];
-                    b.textContent = "[ " + c[1] + " ]";
-                    b.addEventListener("click", function() {
-                        sortBy = sortBy === c[0] ? null : c[0];
-                        save(ACH_SORT_KEY, sortBy);
-                        apply();
-                    });
-                    row.appendChild(b);
-                }
-                var on = sortBy === c[0];
-                if (b.classList.contains("on") !== on) b.classList.toggle("on", on);
-                b.setAttribute("aria-pressed", String(on));
-                b.title = on ? "back to the site's order" : c[2];
+    function apply(box) {
+        var host = document.getElementById(box[0]);
+        if (!host) return;
+        var folded = !!folds[box[1]];
+        host.classList.toggle("omhp-df-folded", folded);
+        var head = host.firstElementChild;
+        if (!head || head.tagName !== "B") return;
+        var b = head.querySelector(".omhp-df-fold");
+        if (!b) {
+            b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-text omhp-clan-fold omhp-df-fold";
+            b.addEventListener("click", function() {
+                if (folds[box[1]]) delete folds[box[1]];
+                else folds[box[1]] = true;
+                save(FORGE_FOLD_KEY, folds);
+                apply(box);
             });
+            head.insertBefore(b, head.firstChild);
         }
-        var cards = panel.querySelectorAll(".achievement-list > .achievement-card");
-        var place = sortBy ? achievementOrder(Array.prototype.map.call(cards, function(card) {
-            var line = card.querySelector(".achievement-rarity");
-            return { pinned: card.classList.contains("pinned"), pct: line ? achievementPct(line.textContent) : null };
-        }), sortBy) : null;
-        cards.forEach(function(card, i) {
-            var want = place ? String(place[i]) : "";
-            if (card.style.order !== want) card.style.order = want;
+        var text = folded ? "[+] " : "[-] ";
+        if (b.textContent !== text) b.textContent = text;
+        var rows = host.children.length - 1;
+        b.title = folded ? "show " + box[2] + " (" + rows + ")" : "hide " + box[2];
+        b.setAttribute("aria-expanded", String(!folded));
+    }
+
+    // Each box once the page has built it; it redraws with replaceChildren
+    function attach() {
+        BOXES.forEach(function(box) {
+            var host = document.getElementById(box[0]);
+            if (host && !watched[box[0]]) {
+                watched[box[0]] = true;
+                observeBatched(host, { childList: true }, function() { apply(box); });
+            }
+            apply(box);
         });
     }
 
-    observeBatched(panel, { childList: true, subtree: true }, apply);
+    observeBatched(panel, { childList: true }, attach);
     onSetting(function(key) {
-        if (key !== ACH_SORT_KEY) return;
-        sortBy = loadJSON(ACH_SORT_KEY, null);
-        apply();
+        if (key !== FORGE_FOLD_KEY) return;
+        folds = loadSaved(FORGE_FOLD_KEY);
+        BOXES.forEach(apply);
     });
-    apply();
+    attach();
 }
 
 

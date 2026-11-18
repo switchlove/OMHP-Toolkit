@@ -9,7 +9,7 @@
 //
 // What it checks:
 //   - every site module src/page.js imports still exists, and still exports each name the
-//     page script uses from it (api.getAuction, store.on, ...)
+//     page script uses from it (api.getDaily, store.on, ...)
 //   - every element id the toolkit looks up (getElementById, "#id" selectors) is still in the
 //     site's index.html or one of its modules
 // The site's files are only read as text: nothing from them is run.

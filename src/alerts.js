@@ -61,7 +61,7 @@ function notifier() {
     check();
 }
 
-// SOUNDS > NEW BOSS (MENTION is in chatPlus, AUCTION MATCH in auctionWatch)
+// SOUNDS > NEW BOSS (MENTION is in chatPlus)
 function soundAlerts() {
     var seq = null;
     every(5000, function() {

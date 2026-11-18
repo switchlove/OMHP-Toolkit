@@ -68,20 +68,23 @@ function pct(p) {
 }
 
 // The chest ledger's name for what a box gave: the rarity for an item ("legendary"),
-// otherwise the reward and its amount ("attacks:5", "ultimate")
+// otherwise the reward and its amount ("attacks:5", "ultimate"); a stated range is "shards:5-20"
 function outcomeKey(kind, rarity, amount) {
     if (kind === "item") return rarity || "item";
     return amount ? kind + ":" + amount : kind;
 }
 
-// ...and how it reads: "LEGENDARY", "+5 ATTACKS", "2 CRIT CHARGES", "ULTIMATE"
+// ...and how it reads: "LEGENDARY", "+5 BONUS ATTACKS", "2 CRIT CHARGES", "ULTIMATE", "5–20 SHARDS"
 function outcomeLabel(key) {
     var parts = key.split(":"), kind = parts[0], n = Number(parts[1]);
-    if (kind === "attacks") return "+" + n + " ATTACK" + (n === 1 ? "" : "S");
+    // Bonus attacks, as the site's odds box says them: "+2–3 BONUS ATTACKS" for a stated range
+    if (kind === "attacks") return "+" + (parts[1] || "").replace("-", "–") + " BONUS ATTACK" + (n === 1 ? "" : "S");
+    if (kind === "box") return "A CHEST";
     if (kind === "next_crit") return n + " CRIT CHARGE" + (n === 1 ? "" : "S");
     if (kind === "ultimate") return "ULTIMATE RECHARGE";
     if (kind === "scroll") return "A SCROLL";
-    return kind.replace(/_/g, " ").toUpperCase();
+    var name = kind.replace(/_/g, " ").toUpperCase();
+    return parts[1] ? parts[1].replace("-", "–") + " " + name : name;
 }
 
 // A box's stated odds ([[key, chance]]) with rows that share a key added up, in first-seen
@@ -95,6 +98,41 @@ function mergeOdds(odds) {
             out.push([o[0], o[1]]);
         }
     });
+    return out;
+}
+
+// What a box gave ({ key: count }), counted under the stated outcome it belongs to (keys). Season
+// 2 states some rewards as a range ("shards:5-20"), but each opening says how many it gave
+// ("shards:12"): that counts under its range, or under the bare kind if that's listed.
+function ledgerOut(out, keys) {
+    var got = {};
+    Object.keys(out).forEach(function(k) {
+        var parts = k.split(":"), n = Number(parts[1]), into = k;
+        if (keys.indexOf(k) === -1 && parts.length === 2) {
+            var range = keys.filter(function(s) {
+                var m = s.match(/^([^:]+):(\d+)-(\d+)$/);
+                return m && m[1] === parts[0] && n >= Number(m[2]) && n <= Number(m[3]);
+            })[0];
+            if (range) into = range;
+            else if (keys.indexOf(parts[0]) !== -1) into = parts[0];
+        }
+        got[into] = (got[into] || 0) + out[k];
+    });
+    return got;
+}
+
+// Your records ({ kind: { v, d: "YYYY-MM-DD", ... } }) for the season that started on `start`:
+// the ones set before it are moved under past[name] (once), since a new season starts the game
+// over. Running it again changes nothing.
+function seasonRecords(rec, start, name) {
+    if (rec.season === start) return rec;
+    var out = { season: start, past: Object.assign({}, rec.past) }, old = {};
+    Object.keys(rec).forEach(function(k) {
+        if (k === "season" || k === "past") return;
+        if (rec[k] && rec[k].d && rec[k].d < start) old[k] = rec[k];
+        else out[k] = rec[k];
+    });
+    if (Object.keys(old).length) out.past[name] = Object.assign(old, out.past[name]);
     return out;
 }
 
@@ -264,32 +302,16 @@ function eventLabel(kind, round) {
     return EVENT_NAMES[kind] || String(kind || "event").replace(/_/g, " ").toUpperCase();
 }
 
-// An achievement's "N% OF PLAYERS HAVE THIS" line as a number: "12.5% ..." -> 12.5,
-// "UNDER 0.1% ..." -> 0.05, "NOBODY HAS THIS YET" -> 0, anything else -> null
-function achievementPct(text) {
-    text = String(text || "");
-    if (/NOBODY HAS THIS/.test(text)) return 0;
-    if (/UNDER 0\.1%/.test(text)) return 0.05;
-    var m = text.match(/([\d.]+)%\s+OF PLAYERS/);
-    return m ? Number(m[1]) : null;
-}
-
-// Where each achievement goes when sorted by how many players have it (dir "rare": fewest
-// first, "common": most first). items: [{ pinned, pct }] in the site's order; returns each one's
-// place. Pinned ones stay first, in their order; ties keep the site's order; no pct goes last.
-function achievementOrder(items, dir) {
-    var idx = items.map(function(x, i) { return i; });
-    var group = function(x) { return x.pinned ? 0 : x.pct === null ? 2 : 1; };
-    idx.sort(function(a, b) {
-        var A = items[a], B = items[b];
-        var g = group(A) - group(B);
-        if (g) return g;
-        if (group(A) === 1 && A.pct !== B.pct) return dir === "common" ? B.pct - A.pct : A.pct - B.pct;
-        return a - b;
+// What changed in a folded pinned panel since you last saw it. seen and now: { id: look }, where
+// look is what matters about the item (a ticket's status, a poll still open or not). fresh:
+// how many weren't there before; changed: how many were, but look different. Gone ones don't count.
+function pinNews(seen, now) {
+    var out = { fresh: 0, changed: 0 };
+    Object.keys(now).forEach(function(id) {
+        if (!Object.prototype.hasOwnProperty.call(seen, id)) out.fresh++;
+        else if (seen[id] !== now[id]) out.changed++;
     });
-    var place = [];
-    idx.forEach(function(i, n) { place[i] = n; });
-    return place;
+    return out;
 }
 
 // A countdown as a clock: 102000 -> "1:42", 3723000 -> "1:02:03"
@@ -321,4 +343,38 @@ function streakDays(days, day) {
         d.setDate(d.getDate() - 1);
     }
     return n;
+}
+
+// The site's countdown text as seconds: "1d 2h 3m", "2h 3m" or "3m 4s" (null if it isn't one)
+function durSecs(text) {
+    var parts = String(text || "").trim().match(/\d+\s*[dhms]/gi);
+    if (!parts) return null;
+    var unit = { d: 86400, h: 3600, m: 60, s: 1 };
+    return parts.reduce(function(n, p) {
+        return n + parseInt(p, 10) * unit[p.slice(-1).toLowerCase()];
+    }, 0);
+}
+
+// POLLS' SORT: the polls ([{ id, open, left, total }]) as ids in the order to show them.
+// "new": newest first (the site's own order). "ending": open polls soonest first, then the
+// ended ones newest first. "votes": most votes first; polls whose count isn't shown yet
+// (total null: open and you haven't voted) go last, newest first.
+function pollOrder(polls, sort) {
+    var byId = function(a, b) { return b.id - a.id; };
+    var list = polls.slice();
+    if (sort === "ending") {
+        list.sort(function(a, b) {
+            if (a.open !== b.open) return a.open ? -1 : 1;
+            if (a.open && a.left !== b.left) return (a.left == null ? Infinity : a.left) - (b.left == null ? Infinity : b.left);
+            return byId(a, b);
+        });
+    } else if (sort === "votes") {
+        list.sort(function(a, b) {
+            var ka = a.total == null, kb = b.total == null;
+            if (ka !== kb) return ka ? 1 : -1;
+            if (!ka && a.total !== b.total) return b.total - a.total;
+            return byId(a, b);
+        });
+    } else list.sort(byId);
+    return list.map(function(p) { return p.id; });
 }

@@ -35,7 +35,8 @@ test("canary knows an export when it sees one", () => {
 
 test("canary finds what the page script uses", () => {
     const uses = canary.pageImports();
-    assert.ok(uses["api.js"].has("getAuction"));
+    assert.ok(uses["api.js"].has("getDaily"));
+    assert.ok(!uses["api.js"].has("getAuction")); // AUCTION WATCH is gone (Season 2)
     assert.ok(uses["store.js"].has("on"));
     assert.ok(!uses["store.js"].has("js"));
     const ids = canary.usedIds();

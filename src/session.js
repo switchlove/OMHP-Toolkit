@@ -280,25 +280,35 @@ function sessionStats() {
     }
 
     // [RECORDS]: one line per record, with the day it was set
+    // ...then each earlier season's, under its name
     function paintRecords() {
-        var r = loadSaved(RECORDS_KEY);
+        var r = loadRecords();
         var when = function(x) { return x && x.d ? x.d.slice(5) : ""; };
+        var bests = function(x) {
+            return [
+                ["BIGGEST HIT", x.hit ? fmt(x.hit.v) : "-", when(x.hit)],
+                ["BEST DAY", x.day ? fmt(x.day.v) : "-", when(x.day)],
+                ["BEST SHARE", x.share ? x.share.v.toFixed(2) + "% (#" + x.share.seq + ")" : "-", when(x.share)],
+                ["RAREST DROP", x.drop ? x.drop.text : "-", when(x.drop)]
+            ];
+        };
         var s = load();
         var playing = sessionCounts(s, myTotals() || s.last).hits > 0;
-        var lines = [
-            ["BIGGEST HIT", r.hit ? fmt(r.hit.v) : "-", when(r.hit)],
-            ["BEST DAY", r.day ? fmt(r.day.v) : "-", when(r.day)],
-            ["BEST SHARE", r.share ? r.share.v.toFixed(2) + "% (#" + r.share.seq + ")" : "-", when(r.share)],
-            ["RAREST DROP", r.drop ? r.drop.text : "-", when(r.drop)],
-            ["STREAK", streakDays(playedDays(playing), today()) + " DAYS (BEST " + (r.streak ? r.streak.v : 0) + ")", ""]
-        ];
-        recBox.textContent = lines.map(function(l) { return l[0].padEnd(12) + " " + String(l[1]).padEnd(24) + " " + l[2]; }).join("\n");
+        var lines = bests(r).concat([["STREAK", streakDays(playedDays(playing), today()) + " DAYS (BEST " + (r.streak ? r.streak.v : 0) + ")", ""]]);
+        Object.keys(r.past || {}).forEach(function(name) {
+            var p = r.past[name];
+            lines.push(["", "", ""], [name, "", ""]);
+            lines = lines.concat(bests(p), [["BEST STREAK", (p.streak ? p.streak.v : 0) + " DAYS", when(p.streak)]]);
+        });
+        recBox.textContent = lines.map(function(l) {
+            return (l[0].padEnd(12) + " " + String(l[1]).padEnd(24) + " " + l[2]).trimEnd();
+        }).join("\n");
     }
 
-    // Bests from before v0.30 (the DAYS table) count too
+    // Bests from before v0.30 (the DAYS table) count too (this season's days only)
     (function seedRecords() {
-        var days = loadSaved(DAYS_KEY), rec = loadSaved(RECORDS_KEY), before = JSON.stringify(rec);
-        Object.keys(days).forEach(function(d) {
+        var days = loadSaved(DAYS_KEY), rec = loadRecords(), before = JSON.stringify(loadSaved(RECORDS_KEY));
+        Object.keys(days).filter(function(d) { return d >= SEASON_START; }).forEach(function(d) {
             var x = days[d].session || {};
             if (x.best && !(rec.hit && rec.hit.v >= x.best)) rec.hit = { v: x.best, d: d };
             if (x.dmg && !(rec.day && rec.day.v >= x.dmg)) rec.day = { v: x.dmg, d: d };
@@ -314,7 +324,8 @@ function sessionStats() {
             if (!s.base || t.dmg < s.base.dmg || t.hits < s.base.hits) s.base = t;
             s.last = t;
             // Shards: only the leader counts changes in the balance, so two tabs don't
-            // count the same one twice. PRESTIGE (no shards and an empty bag at once) isn't spending.
+            // count the same one twice. PRESTIGE (1M shards since Season 2) counts as spending; a
+            // reset (no shards and an empty bag at once, like Season 1's prestige) doesn't.
             if (typeof t.shards === "number" && isLeader()) {
                 var d = s.shards.last === null ? 0 : t.shards - s.shards.last;
                 if (d > 0) s.shards.earned += d;

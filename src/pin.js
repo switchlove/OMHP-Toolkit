@@ -31,7 +31,7 @@ function pinPanel() {
     btn.className = "btn-text omhp-pin";
     tabTools(tabs).appendChild(btn);
 
-    var pins = []; // { key, panel, home, slot, grip, keepShown, fold }, top to bottom
+    var pins = []; // { key, panel, home, slot, grip, keepShown, fold, news, watch, seen, since }, top to bottom
 
     // [_] folds a pinned panel down to its name (remembered by tab), so the others get its room
     var PIN_FOLD_KEY = "omhp.layout.pinFold";
@@ -42,6 +42,72 @@ function pinPanel() {
         p.slot.classList.toggle("folded", on);
         p.fold.textContent = on ? "[+]" : "[_]";
         p.fold.title = on ? "show " + p.key.toUpperCase() + " again" : "fold " + p.key.toUpperCase() + " down to its name";
+        // What it shows now is what you've seen
+        p.seen = on ? looks(p) : null;
+        p.since = Date.now();
+        news(p, "");
+    }
+
+    function toggleFold(p) {
+        if (folds[p.key]) delete folds[p.key];
+        else folds[p.key] = true;
+        save(PIN_FOLD_KEY, folds);
+        paintFold(p);
+    }
+
+    // A folded pin still updates (the site keeps drawing it), so its name says when something
+    // turns up: N NEW for new tickets, polls or boss ballots (of the ones on show, so the site's
+    // HIDE toggles count), UPDATED when one changes status, or for other panels when new
+    // text shows (numbers and times don't count). Unfolding it clears that.
+    // [selector, card -> [id, what matters about it]]
+    var PIN_ITEMS = {
+        tickets: [".ticket-list > .ticket", function(c) {
+            var id = c.querySelector(".ticket-id"), st = c.querySelector(".ticket-status"), note = c.querySelector(".ticket-note");
+            return [id && id.textContent, (st ? st.textContent : "") + (note ? note.textContent : "")];
+        }],
+        polls: [".poll[data-id]", function(c) {
+            return [c.dataset.id, c.classList.contains("poll-open") ? "open" : "ended"];
+        }],
+        // A ballot, then the same boss under YOUR VOTES once you've voted, then its result
+        bossvote: [".bv-card[data-id], .bv-row[data-id], .bv-result", function(c) {
+            var name = c.querySelector(".bv-result > span:not(.bv-verdict)");
+            return c.dataset.id ? [c.dataset.id, c.className] : [name && "result " + name.textContent, ""];
+        }]
+    };
+
+    function looks(p) {
+        var out = {}, rule = PIN_ITEMS[p.key];
+        if (rule) {
+            p.panel.querySelectorAll(rule[0]).forEach(function(c) {
+                var it = rule[1](c);
+                if (it[0]) out[it[0]] = it[1];
+            });
+            return out;
+        }
+        var walk = document.createTreeWalker(p.panel, NodeFilter.SHOW_TEXT), n;
+        while ((n = walk.nextNode())) {
+            var t = n.nodeValue.replace(/\d[\d.,:]*\s*(?:[smhdw]\b|%)?/gi, "").trim();
+            if (t) out[t] = "";
+        }
+        return out;
+    }
+
+    function news(p, text) {
+        var shown = text ? " · " + text : "";
+        if (p.news.textContent !== shown) p.news.textContent = shown;
+        p.slot.classList.toggle("omhp-pin-lit", !!text);
+    }
+
+    function check(p) {
+        if (!folds[p.key]) return;
+        var now = looks(p);
+        // Its first few seconds folded (it may still be loading, after a reload) are the start
+        if (!p.seen || Date.now() - p.since < 5000) {
+            p.seen = now;
+            return;
+        }
+        var n = pinNews(p.seen, now);
+        news(p, n.fresh && PIN_ITEMS[p.key] ? n.fresh + " NEW" : n.fresh || n.changed ? "UPDATED" : "");
     }
 
     function selectedKey() {
@@ -126,16 +192,26 @@ function pinPanel() {
         var fold = document.createElement("button");
         fold.type = "button";
         fold.className = "btn-text omhp-pin-x";
-        fold.addEventListener("click", function() {
-            if (folds[key]) delete folds[key];
-            else folds[key] = true;
-            save(PIN_FOLD_KEY, folds);
-            paintFold(p);
-        });
+        fold.addEventListener("click", function() { toggleFold(p); });
+        // The folded bar: its name (click to unfold) and what's new
         var name = document.createElement("div");
         name.className = "omhp-pin-name";
+        name.title = "show " + key.toUpperCase() + " again";
+        name.addEventListener("click", function() { toggleFold(p); });
         var t = tabButton(key);
         name.textContent = (t && (t.dataset.short || t.textContent.replace(/^\s*\[\s*|\s*\]\s*$/g, ""))) || key.toUpperCase();
+        p.news = document.createElement("span");
+        p.news.className = "omhp-pin-news";
+        name.appendChild(p.news);
+        var queued = false;
+        p.watch = watcher(function() {
+            if (queued || !folds[key]) return;
+            queued = true;
+            requestAnimationFrame(function() {
+                queued = false;
+                check(p);
+            });
+        });
         p.fold = fold;
         slot.appendChild(x);
         slot.appendChild(fold);
@@ -146,6 +222,7 @@ function pinPanel() {
         box.appendChild(p.grip);
         panel.hidden = false;
         p.keepShown.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+        p.watch.observe(panel, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"] });
         setHeight(p, heights[key]);
         paintFold(p);
         pins.push(p);
@@ -157,6 +234,7 @@ function pinPanel() {
         var p = find(key);
         if (!p) return;
         p.keepShown.disconnect();
+        p.watch.disconnect();
         side.insertBefore(p.panel, p.home && p.home.parentNode === side ? p.home : null);
         p.panel.hidden = selectedKey() !== key;
         p.slot.remove();

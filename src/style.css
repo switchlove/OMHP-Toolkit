@@ -93,14 +93,45 @@ html.omhp-flattabs #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; l
 /* Short labels (see shortTabs): hide the site's text, show data-short instead */
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
-html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]) { color: var(--amber); }
+/* News in a tab (new polls, tickets, ballots, changelog, achievements to claim) in the highlight
+   colour: the site's pings sit on the menu headings, which the flat bar hides */
+html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
+html.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--amber); font-weight: 700; }
+/* ...unless the site's pings are switched off (GAME > SETTINGS) */
+html.pings-off.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
+html.pings-off.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: inherit; font-weight: inherit; }
 html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
 /* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
 html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
-/* GAME's sub-menus (COMMUNITY >, HELP >): their tabs join the line, the headings go */
+/* The site's 16px row gap leaves room for the pings over its menu headings, which are hidden here */
+html.omhp-flattabs #tabs { row-gap: 2px; }
+/* GAME's sub-menus: COMMUNITY's tabs join the line and its heading goes */
 html.omhp-flattabs #tabs .tab-sub { display: contents; }
 html.omhp-flattabs #tabs .tab-subcat { display: none; }
 html.omhp-flattabs #tabs .tab-submenu, html.omhp-flattabs #tabs .tab-submenu[hidden] { display: contents !important; }
+/* HELP stays a dropdown (see helpMenu): the help pages, RARITIES, ODDS and the outside links */
+html.omhp-flattabs #tabs .tab-sub.omhp-help { display: inline-block; position: relative; }
+html.omhp-flattabs #tabs .tab-sub.omhp-help[hidden] { display: none; }
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat {
+    display: inline-block; padding: 2px 3px; font-size: 11px; letter-spacing: 0; color: var(--dim);
+}
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat:hover,
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat[aria-expanded="true"],
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.active { color: var(--fg); }
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--amber); }
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-submenu {
+    display: flex !important; flex-direction: column; align-items: stretch;
+    position: absolute; top: 100%; right: 0; z-index: 32; margin: 2px 0 0; padding: 4px;
+    background: var(--bg-2); border: 1px solid var(--dim); box-shadow: 0 6px 18px rgba(0,0,0,.6);
+}
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-submenu[hidden] { display: none !important; }
+html.omhp-flattabs #tabs .tab-sub.omhp-help .tab-submenu button,
+html.omhp-flattabs #tabs .tab-sub.omhp-help .tab-submenu .tab-link {
+    display: block; text-align: left; white-space: nowrap; padding: 4px 10px; font-size: 11px; letter-spacing: 0;
+}
+html.omhp-flattabs #tabs .tab-sub.omhp-help .tab-submenu [hidden] { display: none; }
+/* No short labels in the list: RARITIES and ODDS keep the site's "[ RARITIES ]" like the rest */
+html.omhp-flattabs #tabs .tab-sub.omhp-help .tab-submenu [role=tab][data-short]::before { content: none; }
 /* [PIN] [POP OUT] at the right of the first line, which keeps the same room free on its left */
 html.omhp-flattabs #tabs { position: relative; }
 html.omhp-flattabs #omhp-tab-tools { position: absolute; top: 0; right: 0; z-index: 31; white-space: nowrap; }
@@ -317,12 +348,11 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 .omhp-pin-slot.folded > .panel { display: none !important; }
 .omhp-pin-slot.folded > .omhp-pin-name { display: block; }
 .omhp-pin-slot.folded + .omhp-pin-grip { display: none; }
-/* AUCTION WATCH: the watches and new matches above the auction house, and the lit-up tab */
-.omhp-watch { margin: 0 0 8px; padding: 0 0 6px; border-bottom: 1px dashed var(--faint); font-size: 11px; text-align: left; }
-.omhp-watch-head { color: var(--dim); letter-spacing: .12em; margin-top: 2px; }
-.omhp-watch-row { padding-left: 1ch; color: var(--fg); }
-.omhp-watch-row.dim { color: var(--dim); }
-#tabs [role=tab].omhp-watch-lit:not([aria-selected="true"]) { color: var(--amber); text-decoration: underline; }
+.omhp-pin-slot.folded > .omhp-pin-name { cursor: pointer; }
+.omhp-pin-slot.folded > .omhp-pin-name:hover { color: var(--fg); }
+/* Something new in a folded pin (see check in pinPanel) */
+.omhp-pin-slot.omhp-pin-lit > .omhp-pin-name { color: var(--fg); border-left: 2px solid var(--amber); padding-left: 4px; }
+.omhp-pin-news { color: var(--amber); }
 .omhp-pin-grip { flex: none; margin: -4px 0 4px; }
 #tabs .omhp-pin:disabled { color: var(--faint); cursor: default; }
 
@@ -330,9 +360,17 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 #panel-clan.omhp-clan-folded .clan-members, #panel-clan.omhp-clan-folded .clan-sort { display: none; }
 .omhp-clan-fold { font: inherit; color: var(--dim); padding: 0; }
 .omhp-clan-fold:hover { color: var(--fg); }
-
-/* TICKETS: [ HIDE VOTED ] [ HIDE CLOSED ] (see ticketFilters) */
-#panel-tickets .ticket.omhp-tk-hide { display: none; }
+/* POLLS: HIDE and SORT rows (see pollFilters), in the site's TICKETS look; the layout here is
+   the fallback if its ticket classes change */
+.omhp-poll-filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 10px 0; font-size: 12px; }
+/* SORT and HIDE rows from the left, one under the other, in TICKETS and POLLS alike (the site
+   pushes TICKETS' SORT to the right edge) */
+.ticket-filters .ticket-sorts { margin-left: 0; flex-basis: 100%; }
+#panel-polls .poll.omhp-poll-hidden { display: none; }
+.omhp-poll-none { font-size: 12px; margin: 0 0 10px; }
+/* ASCII BOSS FORGE: YOUR SUBMISSIONS / YOUR BOSSES folded down to their heading (see forgeFold) */
+#panel-designer .omhp-df-folded > :not(b) { display: none; }
+#panel-designer .omhp-df-folded > b { margin-bottom: 0; }
 
 /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
    no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */

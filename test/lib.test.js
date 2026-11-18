@@ -115,8 +115,37 @@ test("outcomeKey and outcomeLabel", () => {
     assert.equal(lib.outcomeKey("ultimate"), "ultimate");
     assert.equal(lib.outcomeLabel("legendary"), "LEGENDARY");
     assert.equal(lib.outcomeLabel("boss_unique"), "BOSS UNIQUE");
-    assert.equal(lib.outcomeLabel("attacks:1"), "+1 ATTACK");
+    assert.equal(lib.outcomeLabel("attacks:1"), "+1 BONUS ATTACK");
+    assert.equal(lib.outcomeLabel("attacks:5"), "+5 BONUS ATTACKS");
+    assert.equal(lib.outcomeLabel("attacks:2-3"), "+2–3 BONUS ATTACKS");
+    assert.equal(lib.outcomeLabel("box"), "A CHEST");
     assert.equal(lib.outcomeLabel("next_crit:2"), "2 CRIT CHARGES");
+    assert.equal(lib.outcomeLabel("shards:12"), "12 SHARDS");
+    assert.equal(lib.outcomeLabel("shards:5-20"), "5–20 SHARDS");
+});
+
+test("seasonRecords", () => {
+    const rec = { hit: { v: 900, d: "2026-11-02" }, day: { v: 5e6, d: "2026-11-12" }, share: { v: 3, d: "2026-11-13", seq: 1 } };
+    const s2 = lib.seasonRecords(rec, "2026-11-13", "SEASON 1");
+    // the day the season starts counts as the new season
+    same(s2, { season: "2026-11-13", share: { v: 3, d: "2026-11-13", seq: 1 },
+        past: { "SEASON 1": { hit: { v: 900, d: "2026-11-02" }, day: { v: 5e6, d: "2026-11-12" } } } });
+    // once is enough: a record set later stays
+    s2.hit = { v: 120, d: "2026-11-14" };
+    assert.equal(lib.seasonRecords(s2, "2026-11-13", "SEASON 1"), s2);
+    // nothing to file away: no past season
+    same(lib.seasonRecords({}, "2026-11-13", "SEASON 1"), { season: "2026-11-13", past: {} });
+});
+
+test("ledgerOut", () => {
+    const keys = ["common", "rare", "shards:5-20"];
+    // an amount counts under the stated range it falls in; items as they are
+    same(lib.ledgerOut({ common: 3, "shards:12": 2, "shards:20": 1 }, keys), { common: 3, "shards:5-20": 3 });
+    // out of range: on its own, unless the bare kind is listed
+    same(lib.ledgerOut({ "shards:40": 1 }, keys), { "shards:40": 1 });
+    same(lib.ledgerOut({ "shards:40": 1 }, ["shards"]), { shards: 1 });
+    // an amount the odds list exactly stays put
+    same(lib.ledgerOut({ "attacks:5": 2 }, ["attacks:5"]), { "attacks:5": 2 });
 });
 
 test("mergeOdds", () => {
@@ -211,24 +240,14 @@ test("titleWith: a FOG countdown is replaced too", () => {
     assert.equal(lib.titleWith("(3/5) [72% ~39m · MERCHANT 1:42] ONE MILLION HP", ""), "(3/5) ONE MILLION HP");
 });
 
-test("achievementPct", () => {
-    assert.equal(lib.achievementPct("12.5% OF PLAYERS HAVE THIS"), 12.5);
-    assert.equal(lib.achievementPct("64% OF PLAYERS HAVE THIS"), 64);
-    assert.equal(lib.achievementPct("UNDER 0.1% OF PLAYERS HAVE THIS"), 0.05);
-    assert.equal(lib.achievementPct("NOBODY HAS THIS YET"), 0);
-    assert.equal(lib.achievementPct(""), null);
-    assert.equal(lib.achievementPct(null), null);
-});
-
-test("achievementOrder", () => {
-    const items = [
-        { pinned: false, pct: 40 }, { pinned: true, pct: 90 }, { pinned: false, pct: null },
-        { pinned: false, pct: 2 }, { pinned: false, pct: 40 }, { pinned: true, pct: 1 }
-    ];
-    // rarest: the pins (1, 5), then 2%, 40%, 40% (site order), then the secret
-    same(lib.achievementOrder(items, "rare"), [3, 0, 5, 2, 4, 1]);
-    // most have it: the pins, then 40%, 40%, 2%, then the secret
-    same(lib.achievementOrder(items, "common"), [2, 0, 5, 4, 3, 1]);
+test("pinNews", () => {
+    const seen = { 369: "NEW", 368: "NEW", 300: "IN PROGRESS" };
+    same(lib.pinNews(seen, seen), { fresh: 0, changed: 0 });
+    // a new ticket, one moved on, one gone (hidden or deleted)
+    same(lib.pinNews(seen, { 370: "NEW", 369: "COMPLETED", 368: "NEW" }), { fresh: 1, changed: 1 });
+    same(lib.pinNews({}, { a: "" }), { fresh: 1, changed: 0 });
+    // an id that's also an Object method name is still new
+    same(lib.pinNews({}, { constructor: "" }), { fresh: 1, changed: 0 });
 });
 
 test("eventLabel", () => {
@@ -257,4 +276,25 @@ test("streakDays", () => {
     assert.equal(lib.streakDays(["2026-10-24", "2026-10-25", "2026-10-26"], "2026-10-26"), 3);
     assert.equal(lib.streakDays(["2026-10-24", "2026-10-26"], "2026-10-26"), 1);
     assert.equal(lib.streakDays([], "2026-10-26"), 0);
+});
+
+test("durSecs", () => {
+    assert.equal(lib.durSecs("1d 2h 3m"), 86400 + 7200 + 180);
+    assert.equal(lib.durSecs("2h 3m"), 7380);
+    assert.equal(lib.durSecs("3m 4s"), 184);
+    assert.equal(lib.durSecs("ENDED"), null);
+    assert.equal(lib.durSecs(""), null);
+});
+
+test("pollOrder", () => {
+    const polls = [
+        { id: 3, open: true, left: 600, total: null },
+        { id: 5, open: true, left: 60, total: 4 },
+        { id: 1, open: false, left: null, total: 30 },
+        { id: 4, open: false, left: null, total: 2 },
+        { id: 2, open: true, left: 3600, total: 9 }
+    ];
+    same(lib.pollOrder(polls, "new"), [5, 4, 3, 2, 1]);
+    same(lib.pollOrder(polls, "ending"), [5, 3, 2, 4, 1]);
+    same(lib.pollOrder(polls, "votes"), [1, 2, 5, 4, 3]);
 });

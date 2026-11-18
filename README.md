@@ -19,8 +19,8 @@ The full guide to every feature is in the **[wiki](https://github.com/switchlove
 
 - **[Layout](https://github.com/switchlove/OMHP-Toolkit/wiki/Layout)**: three resizable columns, with ATTACKS, CHAT, MESSAGES, LOOT and BOSSES on the left. Pin up to three right-hand panels, or pop any panel out into a floating window that snaps and tiles.
 - **[Boss](https://github.com/switchlove/OMHP-Toolkit/wiki/Boss)**: an ASCII HP graph covering the boss's whole life, with heals, phases, FOG, world events, players online, your damage, zoom, replay and a comparison with the last boss. A kill estimate with a range, and a log of every boss you've seen.
-- **[Fight](https://github.com/switchlove/OMHP-Toolkit/wiki/Fight)**: your share of the damage, today's SESSION stats with the last 14 days and your all-time records, FULL IN and IDLE timers, and a LOOT log with drop rates and chest odds.
-- **[Shortcuts and filters](https://github.com/switchlove/OMHP-Toolkit/wiki/Shortcuts-and-Filters)**: Alt shortcuts, hide or highlight lines in ATTACKS and CHAT, AUCTION WATCH, chat replies, player hover cards and a compact mode.
+- **[Fight](https://github.com/switchlove/OMHP-Toolkit/wiki/Fight)**: your share of the damage, today's SESSION stats with the last 14 days and your records for this season (and Season 1's), FULL IN and IDLE timers, and a LOOT log with drop rates and chest odds.
+- **[Shortcuts and filters](https://github.com/switchlove/OMHP-Toolkit/wiki/Shortcuts-and-Filters)**: Alt shortcuts, hide or highlight lines in ATTACKS and CHAT, chat replies, player hover cards and a compact mode.
 - **[Alerts](https://github.com/switchlove/OMHP-Toolkit/wiki/Alerts)**: the boss's HP and kill estimate in the tab title, desktop notifications and sounds.
 - **[Toolkit menu](https://github.com/switchlove/OMHP-Toolkit/wiki/Toolkit-Menu)**: colours and themes (shareable as a code), features on and off, background mist and effect settings, saved layouts, backups, storage, a PERF meter and a debug report. The top bar also gets a clock and the next DAILY reward.
 
@@ -28,7 +28,7 @@ Stats are kept per account, and everything it keeps stays in your browser; see [
 
 ## Notes
 
-This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are ones the site makes itself: RANKS and HISTORY while they're on screen, the boss's board for HOVER CARDS, the DAILY timer and the searches you watch with AUCTION WATCH. Everything it keeps stays in your browser.
+This is an unofficial fan-made script and isn't affiliated with One Million HP. It changes how the page looks on your own screen and reads data the page already has. The only requests it makes are ones the site makes itself: RANKS and HISTORY while they're on screen, the boss's board for HOVER CARDS and the DAILY timer. Everything it keeps stays in your browser.
 
 ## Development
 

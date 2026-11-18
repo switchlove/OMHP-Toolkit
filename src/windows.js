@@ -58,7 +58,7 @@ function floatingPanels() {
         if (key === "designer") return "BOSS FORGE";
         if (info) return info.title;
         var t = tabButton(key);
-        // "[ AUCTION HOUSE 2 ]" -> "AUCTION HOUSE"
+        // "[ HALL OF FAME 2 ]" -> "HALL OF FAME"
         return ((t && t.textContent) || key).replace(/^\[\s*|\s*\]$/g, "").replace(/\s+\d+$/, "").toUpperCase();
     }
 

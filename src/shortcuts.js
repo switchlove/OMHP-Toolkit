@@ -1,7 +1,7 @@
 // Alt + key shortcuts (the site's own keys use no modifier, and it ignores Alt):
 // Alt+1..9 picks a tab in the right column, Alt+P pins, Alt+O pops out, Alt+T opens
-// [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout. Esc leaves a
-// text box.
+// [TOOLKIT]. Matched by the physical key, so they work on any keyboard layout. (Esc leaving a
+// text box is the site's own now.)
 function shortcuts() {
     document.addEventListener("keydown", function(e) {
         if (!e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
@@ -20,13 +20,6 @@ function shortcuts() {
         if (!btn || btn.disabled) return;
         e.preventDefault();
         btn.click();
-    });
-    // Esc leaves a text box (CHAT, DMs...), so Space and the site's other keys attack again. The
-    // chat's emote / name picker takes the first Esc itself (it marks the key handled).
-    document.addEventListener("keydown", function(e) {
-        var t = e.target;
-        if (e.key !== "Escape" || e.defaultPrevented || !t) return;
-        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) t.blur();
     });
 }
 

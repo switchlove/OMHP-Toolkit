@@ -42,8 +42,15 @@ function save(key, value) {
 // numbers don't land in another's.
 var ACCOUNT_KEY = "omhp.account";
 var ACCOUNT_KEYS = ["omhp.session", "omhp.loot", "omhp.chests", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs",
-    "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.watchSeen", "omhp.layout.watchHits",
-    "omhp.layout.undercutSeen", "omhp.layout.dailyNote"];
+    "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.dailyNote"];
+// What features that are gone kept: AUCTION WATCH (Season 2 closed the auction house) and the
+// TICKETS / ACHIEVEMENTS buttons (the game has its own now). Dropped at start-up.
+var RETIRED_KEYS = ["omhp.layout.watches", "omhp.layout.watchSeen", "omhp.layout.watchHits", "omhp.layout.undercutSeen",
+    "omhp.layout.ticketsHideVoted", "omhp.layout.ticketsHideClosed", "omhp.layout.achievementSort"];
+try {
+    RETIRED_KEYS.forEach(function(k) { localStorage.removeItem(k); });
+} catch (e) { /* storage blocked */ }
+
 var account = { owner: loadJSON(ACCOUNT_KEY, null), me: null };
 account.held = !!account.owner;
 setTimeout(function() { account.held = false; }, 15000);
@@ -294,7 +301,7 @@ function tabTools(tabs) {
 // SOUNDS ([TOOLKIT]): which of the toolkit's own alerts play a sound. playSound(name) asks the
 // page script to play one of the site's sounds, which it only does while the site's [SND:ON]
 var SOUNDS_KEY = "omhp.layout.sounds";
-var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"], ["watch", "AUCTION MATCH"]];
+var SOUND_NAMES = [["boss", "NEW BOSS"], ["mention", "MENTION"]];
 
 // EFFECTS ([TOOLKIT], see effectToggles): the background mist (how it moves, its colour, how
 // strong), and parts of the site's effects to switch off on their own. [id, label, hint]
@@ -382,7 +389,7 @@ var FEATURES = [
     ["full", "FULL IN", true], ["loot", "LOOT", true], ["clock", "CLOCK", true], ["flattabs", "FLAT TABS", true],
     ["account", "NAME", true], ["title", "TAB TITLE", true], ["bosses", "BOSS LOG", true], ["keys", "SHORTCUTS", true],
     ["filters", "FILTERS", true], ["compact", "COMPACT", false], ["stats", "STATS THEME", true], ["boxorder", "BOX ORDER", true],
-    ["cards", "HOVER CARDS", true], ["watch", "AUCTION WATCH", true], ["chatplus", "CHAT+", true],
+    ["cards", "HOVER CARDS", true], ["chatplus", "CHAT+", true],
     ["notify", "NOTIFY", false]
 ];
 var features = loadSaved(FEATURES_KEY);
@@ -480,14 +487,22 @@ function eventTag(withName) {
     return name + (ev.until ? " " + clockDur(ev.until - Date.now()) : "");
 }
 
-// Your all-time bests (SESSION > [RECORDS]): { kind: { v, d: day, ...more } }
+// Your bests this season (SESSION > [RECORDS]): { kind: { v, d: day, ...more } }, and earlier
+// seasons' under past: { "SEASON 1": { kind: ... } }
 var RECORDS_KEY = "omhp.records";
 var REC_NAMES = { hit: "BIGGEST HIT", day: "BEST DAY", share: "BEST SHARE", drop: "RAREST DROP", streak: "STREAK" };
 var REC_CELLS = { hit: "BEST HIT", day: "DAMAGE" }; // the SESSION cell each one flashes
+// The day Season 2 started (the server reset everyone's gear, shards and levels): bests from
+// before it are Season 1's
+var SEASON_START = "2026-11-13";
+
+function loadRecords() {
+    return seasonRecords(loadSaved(RECORDS_KEY), SEASON_START, "SEASON 1"); // see lib.js
+}
 
 // A new best? Save it and tell SESSION ("omhp-record"). True if it was one.
 function bumpRecord(kind, value, more) {
-    var all = loadSaved(RECORDS_KEY);
+    var all = loadRecords();
     if (all[kind] && all[kind].v >= value) return false;
     all[kind] = Object.assign({ v: value, d: today() }, more || {});
     save(RECORDS_KEY, all);

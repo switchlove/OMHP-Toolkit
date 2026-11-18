@@ -35,10 +35,10 @@ const PARTS = [
     "shorttabs.js",
     "clock.js",
     "alerts.js",
-    "watch.js",
     "shortcuts.js",
     "filters.js",
     "addons.js",
+    "pollfilters.js",
     "health.js",
     "main.js"
 ];

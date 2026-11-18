@@ -241,7 +241,7 @@ function toolkitMenu() {
     row("MIST", fxPick("tint", MIST_TINTS).concat([el("span", "omhp-menu-hint", "·")], fxPick("strength", MIST_STRENGTHS)));
     row("EFFECTS", fxSwitches);
     paintFx();
-    if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu · Esc leaves a text box")]);
+    if (isOn("keys")) row("KEYS", [el("span", "omhp-menu-hint", "Alt+1–9 tabs · Alt+P pin · Alt+O pop out · Alt+T this menu")]);
 
     // Other userscripts this one knows, checked each time the menu opens
     var addons = el("span", "omhp-menu-hint");

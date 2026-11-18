@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.36
+// @version      0.37
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -26,13 +26,16 @@
 //   - The boss column and the right column stay pinned in view while you scroll.
 //   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
 //     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
-//     with its own resize line, [UNPIN] and [_] to fold it down to its name. [POP OUT]
-//     opens it in a floating window.
+//     with its own resize line, [UNPIN] and [_] to fold it down to its name; a folded one
+//     lights up when something's new in it ("· 2 NEW" tickets, polls or ballots, "· UPDATED").
+//     [POP OUT] opens it in a floating window. New POLLS, VOTE ON BOSSES ballots and TICKETS
+//     light up their tabs (checked every 3 minutes; TICKETS counts features waiting for your
+//     vote and issues filed since you last opened it). POLLS gets HIDE (ENDED, VOTED, SKIPPED,
+//     FROM TICKETS) and SORT (NEWEST, ENDING SOON, MOST VOTES) rows like TICKETS has.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
-//     MEMBERS list folds away with [-] / [+] on its heading. TICKETS gets [ HIDE VOTED ] (only
-//     the tickets you haven't voted on yet) and [ HIDE CLOSED ]. ACHIEVEMENTS gets [ RAREST ]
-//     and [ MOST HAVE IT ], to sort by how many players have each one.
+//     MEMBERS list, and the BOSS FORGE's YOUR SUBMISSIONS and YOUR BOSSES, fold away with
+//     [-] / [+] on their heading.
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -59,8 +62,8 @@
 //   - SESSION (its own box under FIGHT): your damage today, per hour, attacks, best and
 //     average hit, crit rate, shards earned and spent, shards per hour and time played.
 //     Kept across reloads until [RESET] or a new day; [DAYS] shows the last 14 days and
-//     [RECORDS] your all-time bests (biggest hit, best day, best share, rarest drop, days
-//     in a row), with a flash when you set a new one. THIS BOSS: your damage on the boss,
+//     [RECORDS] your bests this season (biggest hit, best day, best share, rarest drop, days
+//     in a row), with a flash when you set a new one, and Season 1's under them. THIS BOSS: your damage on the boss,
 //     by phase on hover (BOSSES lists each boss's events and phases too).
 //     Hover AVG HIT for the spread of your last 200 hits.
 //   - FULL IN: time until every attack slot has refilled, and IDLE: how long today
@@ -86,11 +89,9 @@
 //
 // MORE
 //   - Alt shortcuts: Alt+1..9 picks a right-column tab, Alt+P pins, Alt+O pops out,
-//     Alt+T opens [TOOLKIT]. Esc leaves a text box, so the site's keys attack again.
+//     Alt+T opens [TOOLKIT].
 //   - FILTER on ATTACKS and CHAT: hide lines with some words or names, highlight others.
 //   - COMPACT (off by default): tighter lines and spacing everywhere.
-//   - AUCTION WATCH: [+ THIS SEARCH] above the auction house watches your last search with a
-//     top price; a new listing at or under it is flagged (notification, lit AUCTION tab).
 //   - CHAT+: Shift-click a name in CHAT to reply (@NAME), hover a time for the full date.
 //   - HOVER CARDS: pause over a name in ATTACKS or CHAT for their place on this boss's
 //     board and their damage in the last 5 minutes.
@@ -101,10 +102,10 @@
 // ALERTS
 //   - The browser tab's title adds the boss's HP and kill estimate: "(3/5) [72% ~39m] ...".
 //   - NOTIFY (off by default): desktop notifications while the tab is in the background
-//     for full attacks, boss down / new boss, FOG, new messages, loot from a set rarity,
-//     chat lines that mention you and AUCTION WATCH matches.
-//   - SOUNDS ([TOOLKIT]): the site's own sounds for a new boss, a mention or an auction
-//     match (only while the site's [SND:ON]).
+//     for full attacks, boss down / new boss, FOG, new messages, loot from a set rarity and
+//     chat lines that mention you.
+//   - SOUNDS ([TOOLKIT]): the site's own sounds for a new boss or a mention (only while the
+//     site's [SND:ON]).
 //
 // Your layout, sizes, order, colours, features, HP history, session and loot are saved in
 // localStorage. With the game open in several tabs, one records and the others follow it.

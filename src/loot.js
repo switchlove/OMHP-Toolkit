@@ -99,10 +99,11 @@ function lootLog() {
             chestBox.appendChild(title);
             // Every stated outcome, then anything seen that the odds don't list
             var keys = s.odds.map(function(o) { return o[0]; });
-            Object.keys(c.out).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
+            var out = ledgerOut(c.out, keys); // amounts counted under their stated range (see lib.js)
+            Object.keys(out).forEach(function(k) { if (keys.indexOf(k) === -1) keys.push(k); });
             keys.forEach(function(k) {
                 var odd = s.odds.filter(function(o) { return o[0] === k; })[0];
-                var n = c.out[k] || 0;
+                var n = out[k] || 0;
                 var rowEl = document.createElement("div");
                 rowEl.className = "omhp-chests-row";
                 var name = document.createElement("span");

@@ -80,7 +80,9 @@ function paintAccount() {
                     if (!out || !boxes) return;
                     const all = {};
                     for (const b of boxes) {
+                        // A range of shards (Season 2) as "shards:5-20" (see ledgerOut)
                         all[b.id] = { name: b.name, odds: (b.odds ?? []).map((r) => [r.kind === "item" ? (r.rarity || "item")
+                            : r.amount && r.amount_max > r.amount ? r.kind + ":" + r.amount + "-" + r.amount_max
                             : r.amount ? r.kind + ":" + r.amount : r.kind, r.chance]) };
                     }
                     const text = JSON.stringify(all);
@@ -128,7 +130,7 @@ function paintAccount() {
             .then(([store, tabs, bag, player, shop, ranks, history]) => {
                 // RANKS and HISTORY only fetch when their tab is opened. Reload them while
                 // they're on screen (selected, pinned or popped out), this browser tab is
-                // visible, and you aren't typing in them. CITY and AUCTION refresh themselves.
+                // visible, and you aren't typing in them. CITY refreshes itself.
                 [["ranks", () => ranks.loadRanks(true), 30000], ["history", () => history.loadHistory(), 60000]].forEach(([key, load, ms]) => {
                     setInterval(() => {
                         const p = document.getElementById("panel-" + key);
@@ -288,70 +290,91 @@ function paintAccount() {
                 const out = document.getElementById("omhp-boss-data");
                 if (out) out.dataset.fail = [out.dataset.fail, "DAILY"].filter(Boolean).join(", ");
             });
-        // AUCTION WATCH (see watch.js): the search you last ran in AUCTION, seen as the site asks
-        // for it, so [+ THIS SEARCH] can save it; and the watched searches, fetched (newest
-        // listings first) when the toolkit asks
-        if (${isOn("watch")}) Promise.all([
-            import(${JSON.stringify(base + "store.js" + v)}),
-            import(${JSON.stringify(base + "api.js" + v)})
-        ])
-            .then(([store, api]) => {
-                const out = document.getElementById("omhp-boss-data");
-                const ours = new Set(); // the watch's own requests, which aren't your searches
-                // The query string getAuction builds from these filters
-                const query = (f) => new URLSearchParams(Object.entries(f).filter(([, x]) => x !== undefined && x !== "")
-                    .map(([k, x]) => [k, String(x)])).toString();
-                const realFetch = window.fetch;
-                window.fetch = function(input) {
-                    try {
-                        const u = typeof input === "string" ? input : input?.url ?? "";
-                        const at = u.indexOf("/api/auction?");
-                        if (at !== -1) {
-                            const qs = u.slice(at + "/api/auction?".length);
-                            if (ours.has(qs)) ours.delete(qs);
-                            else {
-                                const f = Object.fromEntries(new URLSearchParams(qs));
-                                delete f.page;
-                                delete f.sort;
-                                out.dataset.aucQuery = JSON.stringify(f);
-                            }
-                        }
-                    } catch (e) { /* never get in the site's way */ }
-                    return realFetch.apply(window, arguments);
-                };
-                document.addEventListener("omhp-watch-poll", async (e) => {
-                    let list = [];
-                    try { list = JSON.parse(e.detail); } catch (err) { return; }
-                    for (const w of list) {
-                        const f = { ...w.f, sort: "new", page: 0 };
-                        const qs = query(f);
-                        ours.add(qs);
-                        try {
-                            const got = await api.getAuction(f);
-                            const listings = (got?.listings ?? []).map((l) => {
-                                const item = store.itemById(l.item_id) ?? l.item ?? {};
-                                return { id: l.id, price: l.price, count: l.count ?? 1, name: item.name ?? "?", rarity: item.rarity ?? "" };
-                            });
-                            document.dispatchEvent(new CustomEvent("omhp-watch-result", { detail: JSON.stringify({ id: w.id, listings }) }));
-                        } catch (err) {
-                            ours.delete(qs); // not logged in, or the site is busy: next round
-                        }
-                    }
-                });
-            })
-            .catch(() => {
-                const out = document.getElementById("omhp-boss-data");
-                if (out) out.dataset.fail = [out.dataset.fail, "AUCTION WATCH"].filter(Boolean).join(", ");
-            });
         // SOUNDS (see playSound): one of the site's own sounds, only while its [SND:ON]
         import(${JSON.stringify(base + "sound.js" + v)})
             .then((sound) => {
-                const play = { boss: sound.relic, mention: sound.crit, watch: sound.loot };
+                const play = { boss: sound.relic, mention: sound.crit };
                 document.addEventListener("omhp-sound", (e) => {
                     if (sound.isOn() && typeof play[e.detail] === "function") play[e.detail]();
                 });
             })
             .catch(() => { /* no sounds, nothing else lost */ });
+        // New POLLS, VOTE ON BOSSES ballots and TICKETS light up their tabs. The site only checks
+        // POLLS and VOTE when the page opens (and POLLS on a new boss), and never marks TICKETS.
+        // So every 3 minutes while the page is on screen, POLLS and VOTE are checked again (their
+        // own badges; not while their panel is open, which would redraw it under you), and
+        // TICKETS shows "[ TICKETS 2 ]" like POLLS does: other players' FEATURES whose YES / NO
+        // vote is running and that you haven't voted on, plus their ISSUES filed since you last
+        // had the tab open.
+        Promise.all([
+            import(${JSON.stringify(base + "ui/polls.js" + v)}),
+            import(${JSON.stringify(base + "ui/bossvote.js" + v)}),
+            import(${JSON.stringify(base + "api.js" + v)}),
+            import(${JSON.stringify(base + "store.js" + v)})
+        ])
+            .then(([polls, bossvote, api, store]) => {
+                const SEEN = "omhp.layout.ticketsSeen"; // the newest ticket id you've had on screen
+                const tab = document.querySelector('#tabs [data-tab="tickets"]');
+                let list = [], newest = 0, fresh = 0;
+                // A feature still taking YES / NO votes (as the site's TICKETS panel decides it)
+                const voting = (t) => (t.kind ?? "issue") === "feature" && typeof t.vote_ends_at === "number" &&
+                    !t.vote_result && t.vote_ends_at > store.now() && (t.status === "new" || t.status === "in_progress");
+                const seen = () => {
+                    try { return Number(JSON.parse(localStorage.getItem(SEEN))) || 0; } catch (e) { return 0; }
+                };
+                const markSeen = () => {
+                    try { localStorage.setItem(SEEN, String(newest)); } catch (e) { /* storage blocked */ }
+                };
+                const onScreen = (id) => {
+                    const p = document.getElementById(id);
+                    return !!p && !p.hidden && !!p.offsetParent;
+                };
+                const paint = () => {
+                    if (!tab) return;
+                    if (newest > seen() && !document.hidden && onScreen("panel-tickets")) markSeen();
+                    if (newest <= seen()) fresh = 0;
+                    // Waiting for your vote: until you vote, or its vote ends
+                    const waiting = list.filter((t) => voting(t) && !t.my_vote && !t.mine).length;
+                    const n = fresh + waiting;
+                    const text = n ? "[ TICKETS " + n + " ]" : "[ TICKETS ]";
+                    if (tab.textContent !== text) tab.textContent = text;
+                    tab.classList.toggle("has-new", n > 0);
+                };
+                let loading = false;
+                const loadTickets = async () => {
+                    if (loading) return;
+                    loading = true;
+                    try {
+                        list = (await api.getTickets())?.tickets ?? [];
+                        newest = list.reduce((n, t) => Math.max(n, Number(t.id) || 0), 0);
+                        if (!seen() && newest) markSeen(); // the first time: no backlog
+                        const s = seen();
+                        fresh = list.filter((t) => Number(t.id) > s && !t.mine && !voting(t)).length;
+                    } catch (e) { /* not logged in, or the site is busy: next time */ }
+                    loading = false;
+                    paint();
+                };
+                // A vote in TICKETS: count again shortly after (the site doesn't say)
+                let again = 0;
+                document.addEventListener("click", (e) => {
+                    const p = document.getElementById("panel-tickets");
+                    if (!p || !(e.target instanceof Node) || !p.contains(e.target)) return;
+                    clearTimeout(again);
+                    again = setTimeout(loadTickets, 1500);
+                });
+                setInterval(() => {
+                    if (document.hidden) return;
+                    if (!onScreen("panel-polls")) polls.loadPolls(true);
+                    if (!onScreen("panel-bossvote")) bossvote.loadBossVotes(true);
+                    loadTickets();
+                }, 180000);
+                setInterval(paint, 3000);
+                setTimeout(loadTickets, 5000);
+            })
+            .catch(() => {
+                const out = document.getElementById("omhp-boss-data");
+                if (out) out.dataset.fail = [out.dataset.fail, "TAB ALERTS"].filter(Boolean).join(", ");
+            });
     `;
     var script = document.createElement("script");
     script.type = "module";

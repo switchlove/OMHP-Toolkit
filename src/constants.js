@@ -30,9 +30,10 @@ var ACCENTS = [
     { name: "WHITE", hex: "#e8e1cb" }
 ];
 var ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-// The site's item rarities, lowest first (its r-* classes), in HELP > RARITIES' order: BOSS
-// UNIQUE beats ASCENDED, SOVEREIGN beats both
-var RARITIES = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "godly", "ascended", "boss_unique", "sovereign"];
+// The site's item rarities, lowest first (its r-* classes), in HELP > RARITIES' order. Season 2
+// has five, plus a BOSS UNIQUE for every boss (Season 1's UNCOMMON, MYTHIC, ASCENDED and
+// SOVEREIGN are gone)
+var RARITIES = ["common", "rare", "epic", "legendary", "godly", "boss_unique"];
 var NOTIFY_RARITY_KEY = "omhp.layout.notifyRarity";
 // What a layout is made of (presets, RESET): column sizes, section order and heights,
 // collapsed sections, the pinned panel and its height, pop-out windows
