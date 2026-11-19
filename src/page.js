@@ -24,9 +24,14 @@ function paintAccount() {
                         const me = store.state.me;
                         // Not logged in: keep the site's [LOG IN]
                         if (!me || !me.login || !me.name) return;
-                        const tag = badges.badgeTag(me.badges, me.id);
-                        if (tag) acct.replaceChildren(tag, " " + me.name);
-                        else acct.replaceChildren(me.name);
+                        // Badges, then the name between its PRESTIGE stars, as the feed shows it
+                        if (typeof badges.withBadges === "function") {
+                            acct.replaceChildren(badges.withBadges(me.badges, me.id, document.createTextNode(me.name)));
+                        } else {
+                            const tag = badges.badgeTag(me.badges, me.id);
+                            if (tag) acct.replaceChildren(tag, " " + me.name);
+                            else acct.replaceChildren(me.name);
+                        }
                         watcher?.takeRecords(); // our own change: don't react to it
                     } catch (e) {
                         /* leave the site's own button as it is */
@@ -66,7 +71,8 @@ function paintAccount() {
                 const publishMe = () => {
                     const m = store.state.me;
                     if (!out || !m || typeof m.total_damage !== "number") return;
-                    out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length });
+                    out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length,
+                        lvl: [m.level_xp ?? null, m.next_level_xp ?? null] }); // XP where this level starts and the next one does (see levelPercent)
                     // The order SHOP lists its loot boxes in (see bagBoxOrder)
                     const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                     if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;

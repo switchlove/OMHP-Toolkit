@@ -94,12 +94,14 @@ html.omhp-flattabs #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; l
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
 /* News in a tab (new polls, tickets, ballots, changelog, achievements to claim) in the highlight
-   colour: the site's pings sit on the menu headings, which the flat bar hides */
+   colour, or the ping colour picked in GAME > SETTINGS (its default grey would light it white):
+   the site's pings sit on the menu headings, which the flat bar hides */
+html[data-ping-color]:not([data-ping-color="grey"]) { --omhp-news: var(--ping-text); }
 html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
-html.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--amber); font-weight: 700; }
-/* ...unless the site's pings are switched off (GAME > SETTINGS) */
+html.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--omhp-news, var(--amber)); font-weight: 700; }
+/* ...dimmed, like the site's own, when its pings are switched off */
 html.pings-off.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
-html.pings-off.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: inherit; font-weight: inherit; }
+html.pings-off.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--dim); font-weight: inherit; }
 html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
 /* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
 html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
@@ -118,7 +120,8 @@ html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat {
 html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat:hover,
 html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat[aria-expanded="true"],
 html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.active { color: var(--fg); }
-html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--amber); }
+html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--omhp-news, var(--amber)); }
+html.pings-off.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--dim); }
 html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-submenu {
     display: flex !important; flex-direction: column; align-items: stretch;
     position: absolute; top: 100%; right: 0; z-index: 32; margin: 2px 0 0; padding: 4px;
@@ -371,6 +374,14 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 /* ASCII BOSS FORGE: YOUR SUBMISSIONS / YOUR BOSSES folded down to their heading (see forgeFold) */
 #panel-designer .omhp-df-folded > :not(b) { display: none; }
 #panel-designer .omhp-df-folded > b { margin-bottom: 0; }
+/* The forge's grid lines at the strength set with the slider by [ GRID ] (see designGrid) */
+html.omhp-grid-set .design-canvas, html.omhp-grid-set .design-canvas.bright-grid {
+    --grid-line: var(--omhp-grid-line); --grid-mid: var(--omhp-grid-mid);
+}
+.omhp-grid-pick { display: inline-flex; align-items: center; gap: 4px; margin: 0 6px; font-size: 11px; color: var(--dim); vertical-align: middle; }
+.omhp-grid-pick input { width: 80px; height: 12px; accent-color: var(--amber); cursor: pointer; }
+/* PROFILE and INVENTORY: how far through this level (see levelPercent) */
+.omhp-lvl-pct { color: var(--amber); }
 
 /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
    no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */

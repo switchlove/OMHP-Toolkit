@@ -219,6 +219,8 @@ function makeGraph(pane, source, rowsFor) {
         var maxOnline = Math.max.apply(null, online.filter(function(n) { return n !== null; }).concat([0]));
         // Whether there's anything to switch, before switching it off
         var hasOnline = maxOnline > 0, hasMine = maxMine > 0, hasFog = fogCols.indexOf(true) !== -1;
+        // Season 2 has no heal scrolls: the key only lists heals once the HP has gone back up
+        var hasHeal = vals.some(function(v, i) { return i > 0 && v !== null && vals[i - 1] !== null && v > vals[i - 1]; });
         if (!show.online) maxOnline = 0;
         if (!show.mine) maxMine = 0;
         // A column higher than the one before it is a heal; a new phase gets a marker
@@ -393,7 +395,9 @@ function makeGraph(pane, source, rowsFor) {
         // to hide or show that series. It wraps at the plot's width.
         var indent = " ".repeat(LABEL + 1), width = LABEL + 1 + cols + RIGHT + (RIGHT ? 1 : 0), used = indent.length;
         frag.appendChild(document.createTextNode(indent));
-        [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"], ["heal", "heal", "^", "heal"], ["phase", "mark", ":", "phase"]]
+        [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"]]
+            .concat(hasHeal ? [["heal", "heal", "^", "heal"]] : [])
+            .concat([["phase", "mark", ":", "phase"]])
             .concat(hasOnline ? [["online", "online", "*", "online"]] : [])
             .concat(hasMine ? [["mine", "mine", "+", "your dmg"]] : [])
             .concat(hasFog ? [["fog", "fog", "~", "fog"]] : [])

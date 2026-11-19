@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.37
+// @version      0.38
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -24,8 +24,8 @@
 //     moves up/down, pops out, and resizes by dragging its bottom edge.
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
-//   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
-//     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
+//   - Right column: a flat tab bar (every unlocked tab as a button, short labels, news in
+//     your highlight colour or the site's ping colour, HELP the only dropdown). [PIN] keeps the open panel above the others, up to three stacked, each
 //     with its own resize line, [UNPIN] and [_] to fold it down to its name; a folded one
 //     lights up when something's new in it ("· 2 NEW" tickets, polls or ballots, "· UPDATED").
 //     [POP OUT] opens it in a floating window. New POLLS, VOTE ON BOSSES ballots and TICKETS
@@ -35,7 +35,8 @@
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
 //     MEMBERS list, and the BOSS FORGE's YOUR SUBMISSIONS and YOUR BOSSES, fold away with
-//     [-] / [+] on their heading.
+//     [-] / [+] on their heading; a LINES slider by the forge's [ GRID ] sets how strong its
+//     grid lines are. PROFILE's and INVENTORY's LEVEL rows add how far through the level you are (54.6%).
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -84,7 +85,7 @@
 //     tabs at once. Stats are kept per account: log in as someone else and theirs swap in.
 //   - Local time, how long the page has been open, and the next DAILY reward (READY when
 //     it's waiting; NOTIFY reminds you once a day).
-//   - The account button shows your badges and name instead of [LOGIN].
+//   - The account button shows your badges, PRESTIGE stars and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
 //
 // MORE
@@ -154,7 +155,7 @@
     var DAYS_KEY = "omhp.days";
     var PRESETS_KEY = "omhp.presets";
 
-    var SCRIPT_VERSION = '0.37';
+    var SCRIPT_VERSION = '0.38';
     var ACTIVE_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || SCRIPT_VERSION;
     console.log(`%c[OMHP Toolkit] v${ACTIVE_VERSION} Active`, 'color: #c93fff; font-weight: bold;');
 
@@ -635,12 +636,14 @@
         html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
         html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
         /* News in a tab (new polls, tickets, ballots, changelog, achievements to claim) in the highlight
-           colour: the site's pings sit on the menu headings, which the flat bar hides */
+           colour, or the ping colour picked in GAME > SETTINGS (its default grey would light it white):
+           the site's pings sit on the menu headings, which the flat bar hides */
+        html[data-ping-color]:not([data-ping-color="grey"]) { --omhp-news: var(--ping-text); }
         html.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
-        html.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--amber); font-weight: 700; }
-        /* ...unless the site's pings are switched off (GAME > SETTINGS) */
+        html.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--omhp-news, var(--amber)); font-weight: 700; }
+        /* ...dimmed, like the site's own, when its pings are switched off */
         html.pings-off.omhp-flattabs #tabs .tab-menu button.has-new:not([aria-selected="true"]),
-        html.pings-off.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: inherit; font-weight: inherit; }
+        html.pings-off.omhp-flattabs #tabs .tab-menu button.wants:not([aria-selected="true"]) { color: var(--dim); font-weight: inherit; }
         html.omhp-flattabs #tabs .tab-menu .tab-link { display: none; }
         /* One line per section (WORLD / YOU / LEADERBOARD / GAME); [PIN] [POP OUT] share the last */
         html.omhp-flattabs #tabs .tab-menu, html.omhp-flattabs #tabs .tab-menu[hidden] { flex: 0 0 100%; justify-content: center; }
@@ -659,7 +662,8 @@
         html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat:hover,
         html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat[aria-expanded="true"],
         html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.active { color: var(--fg); }
-        html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--amber); }
+        html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--omhp-news, var(--amber)); }
+        html.pings-off.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-subcat.has-new:not(.active) { color: var(--dim); }
         html.omhp-flattabs #tabs .tab-sub.omhp-help > .tab-submenu {
             display: flex !important; flex-direction: column; align-items: stretch;
             position: absolute; top: 100%; right: 0; z-index: 32; margin: 2px 0 0; padding: 4px;
@@ -912,6 +916,14 @@
         /* ASCII BOSS FORGE: YOUR SUBMISSIONS / YOUR BOSSES folded down to their heading (see forgeFold) */
         #panel-designer .omhp-df-folded > :not(b) { display: none; }
         #panel-designer .omhp-df-folded > b { margin-bottom: 0; }
+        /* The forge's grid lines at the strength set with the slider by [ GRID ] (see designGrid) */
+        html.omhp-grid-set .design-canvas, html.omhp-grid-set .design-canvas.bright-grid {
+            --grid-line: var(--omhp-grid-line); --grid-mid: var(--omhp-grid-mid);
+        }
+        .omhp-grid-pick { display: inline-flex; align-items: center; gap: 4px; margin: 0 6px; font-size: 11px; color: var(--dim); vertical-align: middle; }
+        .omhp-grid-pick input { width: 80px; height: 12px; accent-color: var(--amber); cursor: pointer; }
+        /* PROFILE and INVENTORY: how far through this level (see levelPercent) */
+        .omhp-lvl-pct { color: var(--amber); }
 
         /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
            no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */
@@ -1894,9 +1906,14 @@
                             const me = store.state.me;
                             // Not logged in: keep the site's [LOG IN]
                             if (!me || !me.login || !me.name) return;
-                            const tag = badges.badgeTag(me.badges, me.id);
-                            if (tag) acct.replaceChildren(tag, " " + me.name);
-                            else acct.replaceChildren(me.name);
+                            // Badges, then the name between its PRESTIGE stars, as the feed shows it
+                            if (typeof badges.withBadges === "function") {
+                                acct.replaceChildren(badges.withBadges(me.badges, me.id, document.createTextNode(me.name)));
+                            } else {
+                                const tag = badges.badgeTag(me.badges, me.id);
+                                if (tag) acct.replaceChildren(tag, " " + me.name);
+                                else acct.replaceChildren(me.name);
+                            }
                             watcher?.takeRecords(); // our own change: don't react to it
                         } catch (e) {
                             /* leave the site's own button as it is */
@@ -1936,7 +1953,8 @@
                     const publishMe = () => {
                         const m = store.state.me;
                         if (!out || !m || typeof m.total_damage !== "number") return;
-                        out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length });
+                        out.dataset.me = JSON.stringify({ id: m.id, dmg: m.total_damage, hits: m.total_attacks, crits: m.total_crits, shards: m.shards, bag: (m.inventory ?? []).length,
+                            lvl: [m.level_xp ?? null, m.next_level_xp ?? null] }); // XP where this level starts and the next one does (see levelPercent)
                         // The order SHOP lists its loot boxes in (see bagBoxOrder)
                         const order = JSON.stringify(Object.keys((m.shop ?? store.state.content?.shop ?? {}).boxes ?? {}));
                         if (out.dataset.boxOrder !== order) out.dataset.boxOrder = order;
@@ -2637,6 +2655,8 @@
             var maxOnline = Math.max.apply(null, online.filter(function(n) { return n !== null; }).concat([0]));
             // Whether there's anything to switch, before switching it off
             var hasOnline = maxOnline > 0, hasMine = maxMine > 0, hasFog = fogCols.indexOf(true) !== -1;
+            // Season 2 has no heal scrolls: the key only lists heals once the HP has gone back up
+            var hasHeal = vals.some(function(v, i) { return i > 0 && v !== null && vals[i - 1] !== null && v > vals[i - 1]; });
             if (!show.online) maxOnline = 0;
             if (!show.mine) maxMine = 0;
             // A column higher than the one before it is a heal; a new phase gets a marker
@@ -2811,7 +2831,9 @@
             // to hide or show that series. It wraps at the plot's width.
             var indent = " ".repeat(LABEL + 1), width = LABEL + 1 + cols + RIGHT + (RIGHT ? 1 : 0), used = indent.length;
             frag.appendChild(document.createTextNode(indent));
-            [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"], ["heal", "heal", "^", "heal"], ["phase", "mark", ":", "phase"]]
+            [[null, "line", "-", "hp"], ["fill", "fill", ".", "fill"]]
+                .concat(hasHeal ? [["heal", "heal", "^", "heal"]] : [])
+                .concat([["phase", "mark", ":", "phase"]])
                 .concat(hasOnline ? [["online", "online", "*", "online"]] : [])
                 .concat(hasMine ? [["mine", "mine", "+", "your dmg"]] : [])
                 .concat(hasFog ? [["fog", "fog", "~", "fog"]] : [])
@@ -4976,7 +4998,8 @@
         if (!tabs) return false;
         var SHORT = [
             ["ACHIEVEMENTS", "ACHIEVE"], ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"], ["THE DIG", "DIG"],
-            ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"]
+            ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"],
+            ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"]
         ];
 
         function label(btn) {
@@ -5508,6 +5531,135 @@
         });
         applyEffects();
     }
+
+
+    // ASCII BOSS FORGE: a slider next to the site's [ GRID ] for how strong the drawing grid's lines
+    // are, from gone to strong (remembered). The site only has faint and bright; clicking its
+    // [ GRID ] goes back to those (the slider then shows where they sit). Double-click it to do the same.
+    var DESIGN_GRID_KEY = "omhp.layout.designGrid";
+
+    function designGrid() {
+        var panel = document.getElementById("panel-designer");
+        if (!panel) return;
+        var root = document.documentElement;
+        var wrap = null, input = null, label = null;
+
+        function value() {
+            var v = loadJSON(DESIGN_GRID_KEY, null);
+            return typeof v === "number" ? Math.max(0, Math.min(100, v)) : null;
+        }
+
+        // Where the site's own two settings sit on the slider
+        function siteValue() {
+            var g = document.getElementById("design-grid");
+            return g && g.getAttribute("aria-pressed") === "true" ? 52 : 14;
+        }
+
+        function paint() {
+            var v = value();
+            root.classList.toggle("omhp-grid-set", v !== null);
+            if (v !== null) {
+                // The site's colours: faint is .035 / .12, bright .13 / .45
+                root.style.setProperty("--omhp-grid-line", "rgba(255,255,255," + (v / 100 * 0.25).toFixed(3) + ")");
+                root.style.setProperty("--omhp-grid-mid", "rgba(255,176,0," + Math.min(1, v / 100 * 0.85).toFixed(3) + ")");
+            }
+            if (!input) return;
+            var shown = v !== null ? v : siteValue();
+            if (Number(input.value) !== shown) input.value = String(shown);
+            var text = v === null ? "LINES" : "LINES " + v + "%";
+            if (label.textContent !== text) label.textContent = text;
+        }
+
+        function set(v) {
+            save(DESIGN_GRID_KEY, v);
+            paint();
+        }
+
+        function attach() {
+            if (wrap && wrap.isConnected) return;
+            var gridBtn = document.getElementById("design-grid");
+            if (!gridBtn) return;
+            if (!wrap) {
+                wrap = document.createElement("label");
+                wrap.className = "omhp-grid-pick";
+                wrap.title = "how strong the grid lines are (double-click to go back to the site's [ GRID ])";
+                label = document.createElement("span");
+                input = document.createElement("input");
+                input.type = "range";
+                input.min = "0";
+                input.max = "100";
+                input.step = "1";
+                input.addEventListener("input", function() { set(Number(input.value)); });
+                input.addEventListener("dblclick", function() { set(null); });
+                wrap.appendChild(label);
+                wrap.appendChild(input);
+            }
+            gridBtn.insertAdjacentElement("afterend", wrap);
+            paint();
+        }
+
+        // The site's [ GRID ] (it has already switched by the time this hears the click)
+        panel.addEventListener("click", function(e) {
+            if (e.target instanceof Element && e.target.closest("#design-grid")) set(null);
+        });
+        observeBatched(panel, { childList: true, subtree: true }, attach);
+        onSetting(function(key) {
+            if (key === DESIGN_GRID_KEY) paint();
+        });
+        paint();
+        attach();
+    }
+
+
+    // YOU > PROFILE and INVENTORY: how far you are through this level, after the LEVEL row's XP
+    // ("1,349,994 / 1,417,683 XP) 54.6%"), in the same terms as INVENTORY's bar (from where this level
+    // started). The site redraws both rows with their panels.
+    function levelPercent() {
+        var share = function(text) {
+            var t = myTotals(), lvl = t && Array.isArray(t.lvl) ? t.lvl : null;
+            if (lvl && typeof lvl[0] === "number" && lvl[1] > lvl[0]) return (t.dmg - lvl[0]) / (lvl[1] - lvl[0]);
+            // No site data: the numbers on the row (counted from 0, not from where this level started)
+            var m = text.replace(/,/g, "").match(/(\d+)\s*\/\s*(\d+)\s*XP/);
+            return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : null;
+        };
+        // [panel, the element holding the "N / N XP" text]
+        var SPOTS = [
+            ["panel-player", function(p) {
+                var cell = Array.prototype.filter.call(p.querySelectorAll("table.kv tr"), function(tr) {
+                    return tr.cells.length > 1 && tr.cells[0].textContent.trim() === "LEVEL";
+                })[0];
+                return cell ? cell.cells[1] : null;
+            }],
+            ["panel-inventory", function(p) { return p.querySelector(".level-row"); }]
+        ];
+        var applies = [];
+        SPOTS.forEach(function(spot) {
+            var panel = document.getElementById(spot[0]);
+            if (!panel) return;
+            var pct = document.createElement("span");
+            pct.className = "omhp-lvl-pct";
+            pct.title = "how far you are through this level";
+            var apply = function() {
+                var row = spot[1](panel);
+                if (!row) return;
+                var at = Array.prototype.filter.call(row.childNodes, function(n) {
+                    return n.nodeType === 3 && /XP\)?\s*$/.test(n.nodeValue);
+                })[0];
+                if (!at) return;
+                var s = share(at.nodeValue);
+                if (s === null) return;
+                // Rounded down, so it only says 100% once you're there
+                var text = " " + (Math.floor(Math.max(0, Math.min(1, s)) * 1000) / 10).toFixed(1) + "%";
+                if (pct.textContent !== text) pct.textContent = text;
+                if (at.nextSibling !== pct) row.insertBefore(pct, at.nextSibling);
+            };
+            observeBatched(panel, { childList: true, subtree: true }, apply);
+            applies.push(apply);
+            apply();
+        });
+        var bridge = document.getElementById("omhp-boss-data");
+        if (bridge) watcher(function() { applies.forEach(function(f) { f(); }); }).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+    }
     // POLLS: HIDE and SORT rows like TICKETS' own. The site has neither, and redraws the whole
     // panel on every load, vote and its 15s refresh, so the same bar goes back under the heading
     // after every redraw, hidden polls get a class, and the cards are moved into the chosen order.
@@ -5745,6 +5897,8 @@
         perfAs("sounds", soundAlerts);
         perfAs("clan", clanFold);
         perfAs("forge", forgeFold);
+        perfAs("forge", designGrid);
+        perfAs("inventory", levelPercent);
         perfAs("polls", pollFilters);
         perfAs("effects", effectToggles);
         perfAs("pin", pinPanel);

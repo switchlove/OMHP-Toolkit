@@ -5,7 +5,8 @@ function shortTabs() {
     if (!tabs) return false;
     var SHORT = [
         ["ACHIEVEMENTS", "ACHIEVE"], ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"], ["THE DIG", "DIG"],
-        ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"]
+        ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"],
+        ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"]
     ];
 
     function label(btn) {

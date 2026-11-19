@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.37
+// @version      0.38
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -24,8 +24,8 @@
 //     moves up/down, pops out, and resizes by dragging its bottom edge.
 //   - Drag the gaps between columns to resize them. Double-click any drag handle to reset.
 //   - The boss column and the right column stay pinned in view while you scroll.
-//   - Right column: a flat tab bar (every unlocked tab as a button, short labels, no
-//     dropdowns). [PIN] keeps the open panel above the others, up to three stacked, each
+//   - Right column: a flat tab bar (every unlocked tab as a button, short labels, news in
+//     your highlight colour or the site's ping colour, HELP the only dropdown). [PIN] keeps the open panel above the others, up to three stacked, each
 //     with its own resize line, [UNPIN] and [_] to fold it down to its name; a folded one
 //     lights up when something's new in it ("· 2 NEW" tickets, polls or ballots, "· UPDATED").
 //     [POP OUT] opens it in a floating window. New POLLS, VOTE ON BOSSES ballots and TICKETS
@@ -35,7 +35,8 @@
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
 //     MEMBERS list, and the BOSS FORGE's YOUR SUBMISSIONS and YOUR BOSSES, fold away with
-//     [-] / [+] on their heading.
+//     [-] / [+] on their heading; a LINES slider by the forge's [ GRID ] sets how strong its
+//     grid lines are. PROFILE's and INVENTORY's LEVEL rows add how far through the level you are (54.6%).
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -84,7 +85,7 @@
 //     tabs at once. Stats are kept per account: log in as someone else and theirs swap in.
 //   - Local time, how long the page has been open, and the next DAILY reward (READY when
 //     it's waiting; NOTIFY reminds you once a day).
-//   - The account button shows your badges and name instead of [LOGIN].
+//   - The account button shows your badges, PRESTIGE stars and name instead of [LOGIN].
 //   - A "⚠ N OFF" warning if parts of this script couldn't start (the site changed).
 //
 // MORE

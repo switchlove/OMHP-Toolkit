@@ -32,6 +32,8 @@ function moveSections() {
     perfAs("sounds", soundAlerts);
     perfAs("clan", clanFold);
     perfAs("forge", forgeFold);
+    perfAs("forge", designGrid);
+    perfAs("inventory", levelPercent);
     perfAs("polls", pollFilters);
     perfAs("effects", effectToggles);
     perfAs("pin", pinPanel);

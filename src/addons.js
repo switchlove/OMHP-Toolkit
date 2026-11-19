@@ -205,3 +205,132 @@ function effectToggles() {
     });
     applyEffects();
 }
+
+
+// ASCII BOSS FORGE: a slider next to the site's [ GRID ] for how strong the drawing grid's lines
+// are, from gone to strong (remembered). The site only has faint and bright; clicking its
+// [ GRID ] goes back to those (the slider then shows where they sit). Double-click it to do the same.
+var DESIGN_GRID_KEY = "omhp.layout.designGrid";
+
+function designGrid() {
+    var panel = document.getElementById("panel-designer");
+    if (!panel) return;
+    var root = document.documentElement;
+    var wrap = null, input = null, label = null;
+
+    function value() {
+        var v = loadJSON(DESIGN_GRID_KEY, null);
+        return typeof v === "number" ? Math.max(0, Math.min(100, v)) : null;
+    }
+
+    // Where the site's own two settings sit on the slider
+    function siteValue() {
+        var g = document.getElementById("design-grid");
+        return g && g.getAttribute("aria-pressed") === "true" ? 52 : 14;
+    }
+
+    function paint() {
+        var v = value();
+        root.classList.toggle("omhp-grid-set", v !== null);
+        if (v !== null) {
+            // The site's colours: faint is .035 / .12, bright .13 / .45
+            root.style.setProperty("--omhp-grid-line", "rgba(255,255,255," + (v / 100 * 0.25).toFixed(3) + ")");
+            root.style.setProperty("--omhp-grid-mid", "rgba(255,176,0," + Math.min(1, v / 100 * 0.85).toFixed(3) + ")");
+        }
+        if (!input) return;
+        var shown = v !== null ? v : siteValue();
+        if (Number(input.value) !== shown) input.value = String(shown);
+        var text = v === null ? "LINES" : "LINES " + v + "%";
+        if (label.textContent !== text) label.textContent = text;
+    }
+
+    function set(v) {
+        save(DESIGN_GRID_KEY, v);
+        paint();
+    }
+
+    function attach() {
+        if (wrap && wrap.isConnected) return;
+        var gridBtn = document.getElementById("design-grid");
+        if (!gridBtn) return;
+        if (!wrap) {
+            wrap = document.createElement("label");
+            wrap.className = "omhp-grid-pick";
+            wrap.title = "how strong the grid lines are (double-click to go back to the site's [ GRID ])";
+            label = document.createElement("span");
+            input = document.createElement("input");
+            input.type = "range";
+            input.min = "0";
+            input.max = "100";
+            input.step = "1";
+            input.addEventListener("input", function() { set(Number(input.value)); });
+            input.addEventListener("dblclick", function() { set(null); });
+            wrap.appendChild(label);
+            wrap.appendChild(input);
+        }
+        gridBtn.insertAdjacentElement("afterend", wrap);
+        paint();
+    }
+
+    // The site's [ GRID ] (it has already switched by the time this hears the click)
+    panel.addEventListener("click", function(e) {
+        if (e.target instanceof Element && e.target.closest("#design-grid")) set(null);
+    });
+    observeBatched(panel, { childList: true, subtree: true }, attach);
+    onSetting(function(key) {
+        if (key === DESIGN_GRID_KEY) paint();
+    });
+    paint();
+    attach();
+}
+
+
+// YOU > PROFILE and INVENTORY: how far you are through this level, after the LEVEL row's XP
+// ("1,349,994 / 1,417,683 XP) 54.6%"), in the same terms as INVENTORY's bar (from where this level
+// started). The site redraws both rows with their panels.
+function levelPercent() {
+    var share = function(text) {
+        var t = myTotals(), lvl = t && Array.isArray(t.lvl) ? t.lvl : null;
+        if (lvl && typeof lvl[0] === "number" && lvl[1] > lvl[0]) return (t.dmg - lvl[0]) / (lvl[1] - lvl[0]);
+        // No site data: the numbers on the row (counted from 0, not from where this level started)
+        var m = text.replace(/,/g, "").match(/(\d+)\s*\/\s*(\d+)\s*XP/);
+        return m && Number(m[2]) > 0 ? Number(m[1]) / Number(m[2]) : null;
+    };
+    // [panel, the element holding the "N / N XP" text]
+    var SPOTS = [
+        ["panel-player", function(p) {
+            var cell = Array.prototype.filter.call(p.querySelectorAll("table.kv tr"), function(tr) {
+                return tr.cells.length > 1 && tr.cells[0].textContent.trim() === "LEVEL";
+            })[0];
+            return cell ? cell.cells[1] : null;
+        }],
+        ["panel-inventory", function(p) { return p.querySelector(".level-row"); }]
+    ];
+    var applies = [];
+    SPOTS.forEach(function(spot) {
+        var panel = document.getElementById(spot[0]);
+        if (!panel) return;
+        var pct = document.createElement("span");
+        pct.className = "omhp-lvl-pct";
+        pct.title = "how far you are through this level";
+        var apply = function() {
+            var row = spot[1](panel);
+            if (!row) return;
+            var at = Array.prototype.filter.call(row.childNodes, function(n) {
+                return n.nodeType === 3 && /XP\)?\s*$/.test(n.nodeValue);
+            })[0];
+            if (!at) return;
+            var s = share(at.nodeValue);
+            if (s === null) return;
+            // Rounded down, so it only says 100% once you're there
+            var text = " " + (Math.floor(Math.max(0, Math.min(1, s)) * 1000) / 10).toFixed(1) + "%";
+            if (pct.textContent !== text) pct.textContent = text;
+            if (at.nextSibling !== pct) row.insertBefore(pct, at.nextSibling);
+        };
+        observeBatched(panel, { childList: true, subtree: true }, apply);
+        applies.push(apply);
+        apply();
+    });
+    var bridge = document.getElementById("omhp-boss-data");
+    if (bridge) watcher(function() { applies.forEach(function(f) { f(); }); }).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
+}
