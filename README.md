@@ -1,7 +1,6 @@
 # OMHP Toolkit
 
 [![Install](https://img.shields.io/badge/install-userscript-brightgreen?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js)
-[![Greasy Fork installs](https://img.shields.io/greasyfork/dt/601490?label=greasy%20fork%20installs)](https://greasyfork.org/en/scripts/601490-omhp-toolkit)
 [![Release](https://img.shields.io/github/v/release/switchlove/OMHP-Toolkit)](https://github.com/switchlove/OMHP-Toolkit/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/switchlove/OMHP-Toolkit/ci.yml?branch=main&label=CI)](https://github.com/switchlove/OMHP-Toolkit/actions/workflows/ci.yml)
 [![Site canary](https://img.shields.io/github/actions/workflow/status/switchlove/OMHP-Toolkit/canary.yml?label=site%20canary)](https://github.com/switchlove/OMHP-Toolkit/actions/workflows/canary.yml)
