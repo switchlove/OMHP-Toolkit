@@ -1,5 +1,12 @@
 # OMHP Toolkit
 
+[![Install](https://img.shields.io/badge/install-userscript-brightgreen?logo=tampermonkey&logoColor=white)](https://raw.githubusercontent.com/switchlove/OMHP-Toolkit/main/omhp-toolkit.user.js)
+[![Greasy Fork installs](https://img.shields.io/greasyfork/dt/601490?label=greasy%20fork%20installs)](https://greasyfork.org/en/scripts/601490-omhp-toolkit)
+[![Release](https://img.shields.io/github/v/release/switchlove/OMHP-Toolkit)](https://github.com/switchlove/OMHP-Toolkit/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/switchlove/OMHP-Toolkit/ci.yml?branch=main&label=CI)](https://github.com/switchlove/OMHP-Toolkit/actions/workflows/ci.yml)
+[![Site canary](https://img.shields.io/github/actions/workflow/status/switchlove/OMHP-Toolkit/canary.yml?label=site%20canary)](https://github.com/switchlove/OMHP-Toolkit/actions/workflows/canary.yml)
+[![License: MIT](https://img.shields.io/github/license/switchlove/OMHP-Toolkit)](LICENSE)
+
 A Tampermonkey userscript for [One Million HP](https://onemillionhp.com/). It adds a three-column layout with pinned and pop-out panels, a boss HP graph with a kill ETA and replay, session, loot and boss logs, alerts, chat and feed filters, saved layouts and colour themes. Almost everything can be switched off in its own settings menu, **[TOOLKIT]**.
 
 [![OMHP Toolkit running on One Million HP](docs/screenshot.png)](docs/screenshot-hq.png)
