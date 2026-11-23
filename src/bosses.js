@@ -25,7 +25,7 @@ function bossLog() {
         m.className = "m";
         var name = document.createElement("span");
         name.className = "val";
-        name.textContent = "#" + x.seq + " " + (x.name || "");
+        name.textContent = "#" + x.seq + " " + (x.name || "") + (x.mod ? " [ " + x.mod + " ]" : "");
         m.appendChild(name);
         var bits = [dur((x.end - x.start) / 60000) + (x.killed ? " · KILLED" : " · LEFT")];
         if (x.mine) bits.push("YOU " + short(x.mine) + (x.all ? " (" + (x.mine / x.all * 100).toFixed(2) + "%)" : ""));
@@ -79,6 +79,7 @@ function bossLog() {
         if (!cur) cur = { seq: b.seq, name: b.name || "", start: now, end: now, mine: 0, all: 0, peak: 0, healed: 0, killed: false, events: {}, ph: {} };
         cur.end = now;
         if (b.name) cur.name = b.name;
+        if (b.mod) cur.mod = String(b.mod).toUpperCase(); // PICK THE BOSS's modifier
         var mine = numberIn(document.getElementById("boss-dmg"));
         if (mine !== null && mine >= cur.mine) cur.mine = mine;
         if (typeof b.dmg === "number") cur.all = Math.max(cur.all, b.dmg);
@@ -89,7 +90,8 @@ function bossLog() {
         // each phase: what your lifetime totals rose by since the last look, put on this phase
         if (!cur.events) cur.events = {};
         if (!cur.ph) cur.ph = {};
-        var ev = b.event;
+        // Only while it's alive: PICK THE BOSS runs on a dead one, and its winner's modifier goes on the next
+        var ev = b.alive !== false ? b.event : null;
         if (ev && ev.kind && ev.kind + ":" + ev.id !== cur.lastEv) {
             cur.lastEv = ev.kind + ":" + ev.id;
             cur.events[ev.kind] = (cur.events[ev.kind] || 0) + 1;

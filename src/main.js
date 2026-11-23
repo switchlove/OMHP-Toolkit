@@ -34,6 +34,8 @@ function moveSections() {
     perfAs("forge", forgeFold);
     perfAs("forge", designGrid);
     perfAs("inventory", levelPercent);
+    perfAs("inventory", unlocksFold);
+    perfAs("inventory", equipmentHide);
     perfAs("polls", pollFilters);
     perfAs("effects", effectToggles);
     perfAs("pin", pinPanel);

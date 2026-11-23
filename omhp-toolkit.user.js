@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.38
+// @version      0.39
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -28,15 +28,18 @@
 //     your highlight colour or the site's ping colour, HELP the only dropdown). [PIN] keeps the open panel above the others, up to three stacked, each
 //     with its own resize line, [UNPIN] and [_] to fold it down to its name; a folded one
 //     lights up when something's new in it ("· 2 NEW" tickets, polls or ballots, "· UPDATED").
-//     [POP OUT] opens it in a floating window. New POLLS, VOTE ON BOSSES ballots and TICKETS
-//     light up their tabs (checked every 3 minutes; TICKETS counts features waiting for your
-//     vote and issues filed since you last opened it). POLLS gets HIDE (ENDED, VOTED, SKIPPED,
-//     FROM TICKETS) and SORT (NEWEST, ENDING SOON, MOST VOTES) rows like TICKETS has.
+//     [POP OUT] opens it in a floating window. New POLLS and VOTE ON BOSSES ballots light up
+//     their tabs (checked every 3 minutes); TICKETS keeps the site's coloured stars. POLLS gets
+//     HIDE (ENDED, SKIPPED, FROM TICKETS) and SORT (NEWEST, ENDING SOON, MOST VOTES) rows under
+//     the site's own [ NOT VOTED ] / [ VOTED ] filter. CHALKBOARD's [ FULL SIZE ] covers the
+//     page even with the column pinned.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
 //     MEMBERS list, and the BOSS FORGE's YOUR SUBMISSIONS and YOUR BOSSES, fold away with
 //     [-] / [+] on their heading; a LINES slider by the forge's [ GRID ] sets how strong its
 //     grid lines are. PROFILE's and INVENTORY's LEVEL rows add how far through the level you are (54.6%).
+//     INVENTORY's LEVEL UNLOCKS folds away with [-] / [+], and YOUR EQUIPMENT gets a HIDE row
+//     to hide any mix of rarities (both remembered).
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -55,7 +58,8 @@
 //     estimated kill, and [VS LAST] lays the previous boss's fight over this one.
 //   - While a world event runs, its name and time left lead the ETA line and the title.
 //   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
-//     peak players online and HP healed; [GRAPH] opens its HP graph in a window.
+//     peak players online, HP healed and its PICK THE BOSS modifier; [GRAPH] opens its HP
+//     graph in a window. Pop-out windows drop under PICK THE BOSS's vote screen.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
 //
 // FIGHT
@@ -155,7 +159,7 @@
     var DAYS_KEY = "omhp.days";
     var PRESETS_KEY = "omhp.presets";
 
-    var SCRIPT_VERSION = '0.38';
+    var SCRIPT_VERSION = '0.39';
     var ACTIVE_VERSION = (typeof GM_info !== 'undefined' && GM_info?.script?.version) || SCRIPT_VERSION;
     console.log(`%c[OMHP Toolkit] v${ACTIVE_VERSION} Active`, 'color: #c93fff; font-weight: bold;');
 
@@ -455,7 +459,8 @@
     }
 
     // World event kinds as short names for the title and graph: "laststand" -> "LAST STAND"
-    var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND" };
+    // pick: PICK THE BOSS, the vote on a dead boss for the next one
+    var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND", pick: "PICK THE BOSS" };
 
     // round: SECOND WIND's round (3 and 4 are THIRD and FOURTH WIND)
     function eventLabel(kind, round) {
@@ -559,6 +564,9 @@
                 display: flex; flex-direction: column;
             }
             #app .col-side > #tabs { flex: none; z-index: 5; } /* dropdowns stay above the panel */
+            /* CHALKBOARD's [ FULL SIZE ] lifts the board over the page, but a pinned column keeps it in
+               its own layer: lift the column too while it's big (pop-out windows the same, further down) */
+            html.chalk-open #app .col-side:has(#panel-chalkboard.chalk-big) { z-index: 70; }
             #app .col-side > .panel {
                 flex: 1 1 auto; min-height: 0;
                 overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
@@ -635,6 +643,8 @@
         /* Short labels (see shortTabs): hide the site's text, show data-short instead */
         html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
         html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
+        /* ...but [ TICKETS ]'s stars are the site's own, each in its ticket type's colour: "TICKETS *2 *" */
+        html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] .tab-star { font-size: 11px; margin-left: .4em; }
         /* News in a tab (new polls, tickets, ballots, changelog, achievements to claim) in the highlight
            colour, or the ping colour picked in GAME > SETTINGS (its default grey would light it white):
            the site's pings sit on the menu headings, which the flat bar hides */
@@ -908,6 +918,8 @@
         /* POLLS: HIDE and SORT rows (see pollFilters), in the site's TICKETS look; the layout here is
            the fallback if its ticket classes change */
         .omhp-poll-filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 10px 0; font-size: 12px; }
+        /* Close under the site's own [ ALL ] [ NOT VOTED ] [ VOTED ], as one block */
+        #panel-polls .poll-filters + .omhp-poll-filters { margin-top: -6px; }
         /* SORT and HIDE rows from the left, one under the other, in TICKETS and POLLS alike (the site
            pushes TICKETS' SORT to the right edge) */
         .ticket-filters .ticket-sorts { margin-left: 0; flex-basis: 100%; }
@@ -924,6 +936,18 @@
         .omhp-grid-pick input { width: 80px; height: 12px; accent-color: var(--amber); cursor: pointer; }
         /* PROFILE and INVENTORY: how far through this level (see levelPercent) */
         .omhp-lvl-pct { color: var(--amber); }
+        /* INVENTORY: LEVEL UNLOCKS folded down to its heading (see unlocksFold) */
+        #panel-inventory.omhp-unlocks-folded .unlocks > :not(.unlocks-h) { display: none; }
+        #panel-inventory.omhp-unlocks-folded .unlocks-h { margin-bottom: 0; }
+        /* INVENTORY: YOUR EQUIPMENT's HIDE row, and the rarities it hides (see equipmentHide) */
+        .omhp-own-hides { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 4px 0; font-size: 12px; }
+        .omhp-own-hides[hidden], .omhp-own-hides [hidden] { display: none; }
+        #panel-inventory[data-omhp-own-hide~="common"] .own-list > .own-row:has(.own-name.r-common),
+        #panel-inventory[data-omhp-own-hide~="rare"] .own-list > .own-row:has(.own-name.r-rare),
+        #panel-inventory[data-omhp-own-hide~="epic"] .own-list > .own-row:has(.own-name.r-epic),
+        #panel-inventory[data-omhp-own-hide~="legendary"] .own-list > .own-row:has(.own-name.r-legendary),
+        #panel-inventory[data-omhp-own-hide~="godly"] .own-list > .own-row:has(.own-name.r-godly),
+        #panel-inventory[data-omhp-own-hide~="boss_unique"] .own-list > .own-row:has(.own-name.r-boss_unique) { display: none; }
 
         /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
            no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */
@@ -958,6 +982,10 @@
             min-width: 300px; min-height: 200px; resize: both; overflow: hidden;
             background: var(--bg); border: 1px solid var(--dim); box-shadow: 0 10px 40px rgba(0,0,0,.7);
         }
+        html.chalk-open .omhp-float:has(#panel-chalkboard.chalk-big) { z-index: 70; }
+        /* PICK THE BOSS: the vote screen (z-index 45) covers the page for 20 seconds; windows go under it
+           so they can't sit over the two choices */
+        body.picking .omhp-float { z-index: 44; }
         .omhp-float-bar {
             flex: none; display: flex; justify-content: space-between; align-items: center;
             padding: 4px 8px; background: var(--bg-2); border-bottom: 1px solid var(--faint);
@@ -1074,9 +1102,9 @@
     var ACCOUNT_KEYS = ["omhp.session", "omhp.loot", "omhp.chests", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs",
         "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.dailyNote"];
     // What features that are gone kept: AUCTION WATCH (Season 2 closed the auction house) and the
-    // TICKETS / ACHIEVEMENTS buttons (the game has its own now). Dropped at start-up.
+    // TICKETS / ACHIEVEMENTS buttons and the TICKETS tab count (the game has its own now). Dropped at start-up.
     var RETIRED_KEYS = ["omhp.layout.watches", "omhp.layout.watchSeen", "omhp.layout.watchHits", "omhp.layout.undercutSeen",
-        "omhp.layout.ticketsHideVoted", "omhp.layout.ticketsHideClosed", "omhp.layout.achievementSort"];
+        "omhp.layout.ticketsHideVoted", "omhp.layout.ticketsHideClosed", "omhp.layout.achievementSort", "omhp.layout.ticketsSeen"];
     try {
         RETIRED_KEYS.forEach(function(k) { localStorage.removeItem(k); });
     } catch (e) { /* storage blocked */ }
@@ -1942,7 +1970,9 @@
                         if (!out || !b) return;
                         out.dataset.boss = JSON.stringify({
                             seq: b.seq, name: b.name, hp: b.hp, max: b.max_hp, phase: b.phase,
-                            dmg: b.total_damage, alive: b.status === "alive", event: localEvent(b.event)
+                            dmg: b.total_damage, alive: b.status === "alive", event: localEvent(b.event),
+                            // PICK THE BOSS's modifier on this fight ("x2 HEALTH")
+                            mod: b.boss_mod?.name ?? null
                         });
                     };
                     store.on("boss", publish);
@@ -2187,77 +2217,24 @@
                     });
                 })
                 .catch(() => { /* no sounds, nothing else lost */ });
-            // New POLLS, VOTE ON BOSSES ballots and TICKETS light up their tabs. The site only checks
-            // POLLS and VOTE when the page opens (and POLLS on a new boss), and never marks TICKETS.
-            // So every 3 minutes while the page is on screen, POLLS and VOTE are checked again (their
-            // own badges; not while their panel is open, which would redraw it under you), and
-            // TICKETS shows "[ TICKETS 2 ]" like POLLS does: other players' FEATURES whose YES / NO
-            // vote is running and that you haven't voted on, plus their ISSUES filed since you last
-            // had the tab open.
+            // New POLLS and VOTE ON BOSSES ballots light up their tabs. The site only checks them when
+            // the page opens (and POLLS on a new boss), so every 3 minutes while the page is on screen
+            // they're checked again (their own badges; not while their panel is open, which would
+            // redraw it under you). TICKETS lights itself now (its stars, every minute).
             Promise.all([
                 import(${JSON.stringify(base + "ui/polls.js" + v)}),
-                import(${JSON.stringify(base + "ui/bossvote.js" + v)}),
-                import(${JSON.stringify(base + "api.js" + v)}),
-                import(${JSON.stringify(base + "store.js" + v)})
+                import(${JSON.stringify(base + "ui/bossvote.js" + v)})
             ])
-                .then(([polls, bossvote, api, store]) => {
-                    const SEEN = "omhp.layout.ticketsSeen"; // the newest ticket id you've had on screen
-                    const tab = document.querySelector('#tabs [data-tab="tickets"]');
-                    let list = [], newest = 0, fresh = 0;
-                    // A feature still taking YES / NO votes (as the site's TICKETS panel decides it)
-                    const voting = (t) => (t.kind ?? "issue") === "feature" && typeof t.vote_ends_at === "number" &&
-                        !t.vote_result && t.vote_ends_at > store.now() && (t.status === "new" || t.status === "in_progress");
-                    const seen = () => {
-                        try { return Number(JSON.parse(localStorage.getItem(SEEN))) || 0; } catch (e) { return 0; }
-                    };
-                    const markSeen = () => {
-                        try { localStorage.setItem(SEEN, String(newest)); } catch (e) { /* storage blocked */ }
-                    };
+                .then(([polls, bossvote]) => {
                     const onScreen = (id) => {
                         const p = document.getElementById(id);
                         return !!p && !p.hidden && !!p.offsetParent;
                     };
-                    const paint = () => {
-                        if (!tab) return;
-                        if (newest > seen() && !document.hidden && onScreen("panel-tickets")) markSeen();
-                        if (newest <= seen()) fresh = 0;
-                        // Waiting for your vote: until you vote, or its vote ends
-                        const waiting = list.filter((t) => voting(t) && !t.my_vote && !t.mine).length;
-                        const n = fresh + waiting;
-                        const text = n ? "[ TICKETS " + n + " ]" : "[ TICKETS ]";
-                        if (tab.textContent !== text) tab.textContent = text;
-                        tab.classList.toggle("has-new", n > 0);
-                    };
-                    let loading = false;
-                    const loadTickets = async () => {
-                        if (loading) return;
-                        loading = true;
-                        try {
-                            list = (await api.getTickets())?.tickets ?? [];
-                            newest = list.reduce((n, t) => Math.max(n, Number(t.id) || 0), 0);
-                            if (!seen() && newest) markSeen(); // the first time: no backlog
-                            const s = seen();
-                            fresh = list.filter((t) => Number(t.id) > s && !t.mine && !voting(t)).length;
-                        } catch (e) { /* not logged in, or the site is busy: next time */ }
-                        loading = false;
-                        paint();
-                    };
-                    // A vote in TICKETS: count again shortly after (the site doesn't say)
-                    let again = 0;
-                    document.addEventListener("click", (e) => {
-                        const p = document.getElementById("panel-tickets");
-                        if (!p || !(e.target instanceof Node) || !p.contains(e.target)) return;
-                        clearTimeout(again);
-                        again = setTimeout(loadTickets, 1500);
-                    });
                     setInterval(() => {
                         if (document.hidden) return;
                         if (!onScreen("panel-polls")) polls.loadPolls(true);
                         if (!onScreen("panel-bossvote")) bossvote.loadBossVotes(true);
-                        loadTickets();
                     }, 180000);
-                    setInterval(paint, 3000);
-                    setTimeout(loadTickets, 5000);
                 })
                 .catch(() => {
                     const out = document.getElementById("omhp-boss-data");
@@ -3104,7 +3081,8 @@
                 events = [];
             }
             if (b.max) maxHp = b.max;
-            if (b.event && b.event.kind && b.event.kind !== "fog") markEvent(b.event.kind);
+            // Not on a dead boss (PICK THE BOSS's vote is about the next one)
+            if (b.alive !== false && b.event && b.event.kind && b.event.kind !== "fog") markEvent(b.event.kind);
             var me = myTotals();
             points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
             // Long fights: thin out the older half instead of dropping the start
@@ -4318,7 +4296,7 @@
             m.className = "m";
             var name = document.createElement("span");
             name.className = "val";
-            name.textContent = "#" + x.seq + " " + (x.name || "");
+            name.textContent = "#" + x.seq + " " + (x.name || "") + (x.mod ? " [ " + x.mod + " ]" : "");
             m.appendChild(name);
             var bits = [dur((x.end - x.start) / 60000) + (x.killed ? " · KILLED" : " · LEFT")];
             if (x.mine) bits.push("YOU " + short(x.mine) + (x.all ? " (" + (x.mine / x.all * 100).toFixed(2) + "%)" : ""));
@@ -4372,6 +4350,7 @@
             if (!cur) cur = { seq: b.seq, name: b.name || "", start: now, end: now, mine: 0, all: 0, peak: 0, healed: 0, killed: false, events: {}, ph: {} };
             cur.end = now;
             if (b.name) cur.name = b.name;
+            if (b.mod) cur.mod = String(b.mod).toUpperCase(); // PICK THE BOSS's modifier
             var mine = numberIn(document.getElementById("boss-dmg"));
             if (mine !== null && mine >= cur.mine) cur.mine = mine;
             if (typeof b.dmg === "number") cur.all = Math.max(cur.all, b.dmg);
@@ -4382,7 +4361,8 @@
             // each phase: what your lifetime totals rose by since the last look, put on this phase
             if (!cur.events) cur.events = {};
             if (!cur.ph) cur.ph = {};
-            var ev = b.event;
+            // Only while it's alive: PICK THE BOSS runs on a dead one, and its winner's modifier goes on the next
+            var ev = b.alive !== false ? b.event : null;
             if (ev && ev.kind && ev.kind + ":" + ev.id !== cur.lastEv) {
                 cur.lastEv = ev.kind + ":" + ev.id;
                 cur.events[ev.kind] = (cur.events[ev.kind] || 0) + 1;
@@ -4993,17 +4973,26 @@
 
     // Shorter labels on the flat tab bar: "[ ACHIEVEMENTS 2 ]" shows as "ACHIEVE 2".
     // The site's own text is left alone (it rewrites it for counts); CSS shows data-short.
+    // [ TICKETS ]'s coloured stars (.tab-star) stay the site's own elements, shown after the label.
     function shortTabs() {
         var tabs = document.getElementById("tabs");
         if (!tabs) return false;
         var SHORT = [
             ["ACHIEVEMENTS", "ACHIEVE"], ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"], ["THE DIG", "DIG"],
             ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"],
-            ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"]
+            ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"], ["CHALKBOARD", "CHALK"]
         ];
 
+        function text(btn) {
+            var t = "";
+            btn.childNodes.forEach(function(n) {
+                if (!(n.classList && n.classList.contains("tab-star"))) t += n.textContent || "";
+            });
+            return t;
+        }
+
         function label(btn) {
-            var t = (btn.textContent || "").replace(/^\s*\[\s*|\s*\]\s*$/g, "").replace(/\s+/g, " ");
+            var t = text(btn).replace(/^\s*\[\s*|\s*\]\s*$/g, "").replace(/\s+/g, " ").trim();
             SHORT.forEach(function(pair) {
                 if (t.indexOf(pair[0]) === 0) t = pair[1] + t.slice(pair[0].length);
             });
@@ -5660,9 +5649,157 @@
         var bridge = document.getElementById("omhp-boss-data");
         if (bridge) watcher(function() { applies.forEach(function(f) { f(); }); }).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
     }
-    // POLLS: HIDE and SORT rows like TICKETS' own. The site has neither, and redraws the whole
-    // panel on every load, vote and its 15s refresh, so the same bar goes back under the heading
-    // after every redraw, hidden polls get a class, and the cards are moved into the chosen order.
+
+
+    // INVENTORY: [-] / [+] on LEVEL UNLOCKS folds the list down to its heading (remembered). The site
+    // redraws the panel on every update of your data, so the button goes back on after each redraw
+    // and the rows are hidden with a class on the panel, which the redraws leave alone. HELP's
+    // pop-up of the same list stays as it is.
+    var UNLOCKS_FOLD_KEY = "omhp.layout.unlocksFold";
+
+    function unlocksFold() {
+        var panel = document.getElementById("panel-inventory");
+        if (!panel) return;
+        var folded = loadJSON(UNLOCKS_FOLD_KEY, false) === true;
+
+        function apply() {
+            if (panel.classList.contains("omhp-unlocks-folded") !== folded) panel.classList.toggle("omhp-unlocks-folded", folded);
+            var head = panel.querySelector(".unlocks > .unlocks-h");
+            if (!head) return;
+            var b = head.querySelector(".omhp-unlocks-fold");
+            if (!b) {
+                b = document.createElement("button");
+                b.type = "button";
+                b.className = "btn-text omhp-clan-fold omhp-unlocks-fold";
+                b.addEventListener("click", function() {
+                    folded = !folded;
+                    save(UNLOCKS_FOLD_KEY, folded);
+                    apply();
+                });
+                head.insertBefore(b, head.firstChild);
+            }
+            var text = folded ? "[+] " : "[-] ";
+            if (b.textContent !== text) b.textContent = text;
+            // Folded, the title still says what's next: "LEVEL 30 GODLY gear and BOSS UNIQUES <- NEXT (3 levels to go)"
+            var next = panel.querySelector(".unlocks-next");
+            var title = folded ? "show what each level opens" +
+                (next ? ". Next: " + (next.textContent || "").replace(/^\s*\[\s*\]\s*/, "").replace(/\s+/g, " ").trim() : "") : "hide the level unlocks";
+            if (b.title !== title) b.title = title;
+            if (b.getAttribute("aria-expanded") !== String(!folded)) b.setAttribute("aria-expanded", String(!folded));
+        }
+
+        observeBatched(panel, { childList: true, subtree: true }, apply);
+        onSetting(function(key) {
+            if (key !== UNLOCKS_FOLD_KEY) return;
+            folded = loadJSON(UNLOCKS_FOLD_KEY, false) === true;
+            apply();
+        });
+        apply();
+    }
+
+
+    // INVENTORY: a HIDE row under YOUR EQUIPMENT's RARITY / EFFECT / SORT, to hide any mix of rarities
+    // at once (the site's RARITY picks just one to show). Remembered. The hidden rarities go on the
+    // panel as data-omhp-own-hide and the stylesheet hides their rows, so a redraw (every update of
+    // your data) never shows them for a moment; the row of buttons goes back on after each redraw.
+    // Each button counts that rarity's rows in the list as the site's own filters leave it.
+    var OWN_HIDE_KEY = "omhp.layout.ownHide";
+
+    function equipmentHide() {
+        var panel = document.getElementById("panel-inventory");
+        if (!panel) return;
+        var hide;
+        function load() {
+            var s = loadJSON(OWN_HIDE_KEY, []);
+            hide = Array.isArray(s) ? s.filter(function(r) { return RARITIES.indexOf(r) !== -1; }) : [];
+        }
+        load();
+
+        var bar = document.createElement("div");
+        bar.className = "ticket-filters omhp-own-hides";
+        var lead = document.createElement("span");
+        lead.className = "dim";
+        lead.textContent = "HIDE ";
+        bar.appendChild(lead);
+        var btns = RARITIES.map(function(r) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "inline-btn ticket-filter r-" + r;
+            var name = r.replace(/_/g, " ").toUpperCase();
+            b.title = "hide your " + name + " gear";
+            b.addEventListener("click", function() {
+                var i = hide.indexOf(r);
+                if (i === -1) hide.push(r);
+                else hide.splice(i, 1);
+                save(OWN_HIDE_KEY, hide);
+                apply();
+            });
+            bar.appendChild(b);
+            return { id: r, name: name, el: b };
+        });
+        var tally = document.createElement("span");
+        tally.className = "dim omhp-own-hidden";
+        var none = document.createElement("div");
+        none.className = "dim bag-note omhp-own-none";
+        none.textContent = "> all hidden: turn a HIDE off";
+
+        function rarityOf(row) {
+            var name = row.querySelector(".own-name");
+            var m = name && name.className.match(/(?:^|\s)r-([a-z_]+)/);
+            return m ? m[1] : "";
+        }
+
+        function apply() {
+            var want = hide.join(" ");
+            if ((panel.dataset.omhpOwnHide || "") !== want) {
+                if (want) panel.dataset.omhpOwnHide = want;
+                else delete panel.dataset.omhpOwnHide;
+            }
+            var picks = panel.querySelector(".own-picks"), list = panel.querySelector(".own-list"), head = panel.querySelector(".own-head");
+            if (!picks || !list) return; // not drawn yet ("> connecting...")
+
+            var counts = {}, rows = list.querySelectorAll(":scope > .own-row"), hidden = 0;
+            rows.forEach(function(row) {
+                var r = rarityOf(row);
+                counts[r] = (counts[r] || 0) + 1;
+                if (hide.indexOf(r) !== -1) hidden++;
+            });
+            var any = false;
+            btns.forEach(function(b) {
+                var on = hide.indexOf(b.id) !== -1, n = counts[b.id] || 0;
+                var show = on || n > 0;
+                if (show) any = true;
+                if (b.el.hidden === show) b.el.hidden = !show;
+                var text = (on ? "[x " : "[ ") + b.name + " " + fmt(n) + " ]";
+                if (b.el.textContent !== text) b.el.textContent = text;
+                if (b.el.getAttribute("aria-pressed") !== String(on)) b.el.setAttribute("aria-pressed", String(on));
+            });
+            if (bar.hidden === any) bar.hidden = !any;
+            if (picks.nextSibling !== bar) picks.parentNode.insertBefore(bar, picks.nextSibling);
+
+            // "YOUR EQUIPMENT  12 / 40 · 28 HIDDEN"
+            var text = hidden ? " · " + fmt(hidden) + " HIDDEN" : "";
+            if (tally.textContent !== text) tally.textContent = text;
+            if (head && hidden && tally.parentNode !== head) head.appendChild(tally);
+            else if (!hidden && tally.isConnected) tally.remove();
+
+            var allGone = hidden > 0 && hidden === rows.length;
+            if (allGone && none.nextSibling !== list) list.parentNode.insertBefore(none, list);
+            else if (!allGone && none.isConnected) none.remove();
+        }
+
+        observeBatched(panel, { childList: true, subtree: true }, apply);
+        onSetting(function(key) {
+            if (key !== OWN_HIDE_KEY) return;
+            load();
+            apply();
+        });
+        apply();
+    }
+    // POLLS: HIDE and SORT rows like TICKETS' own, under the site's [ ALL ] [ NOT VOTED ] [ VOTED ]
+    // filter (which covers voted or not). The site redraws the whole panel on every load, vote and
+    // its 15s refresh, so the same bar goes back under its filter after every redraw, hidden polls
+    // get a class, and the cards are moved into the chosen order.
     // Everything is read from the cards the site draws: a poll's vote count only when the site
     // shows it (you voted, skipped, or it ended), so MOST VOTES never gives away an open poll's.
     var POLL_FILTER_KEY = "omhp.layout.pollFilters";
@@ -5670,7 +5807,7 @@
     function pollFilters() {
         var panel = document.getElementById("panel-polls");
         if (!panel) return false;
-        var HIDES = [["ended", "ENDED", "polls that have passed or failed"], ["voted", "VOTED", "polls you've voted on"],
+        var HIDES = [["ended", "ENDED", "polls that have passed or failed"],
             ["skipped", "SKIPPED", "polls you skipped"], ["ticket", "FROM TICKETS", "polls that came from a player's ticket"]];
         var SORTS = [["new", "NEWEST", "newest first"], ["ending", "ENDING SOON", "open polls ending soonest first, then ended ones"],
             ["votes", "MOST VOTES", "most votes first (open polls you haven't voted on, whose counts are hidden, go last)"]];
@@ -5679,7 +5816,8 @@
         function load() {
             var s = loadJSON(POLL_FILTER_KEY, null);
             state = {
-                hide: s && Array.isArray(s.hide) ? s.hide : ["ended"],
+                // VOTED was one until the site's own filter (2026-11-19)
+                hide: s && Array.isArray(s.hide) ? s.hide.filter(function(k) { return HIDES.some(function(h) { return h[0] === k; }); }) : ["ended"],
                 sort: s && SORTS.some(function(x) { return x[0] === s.sort; }) ? s.sort : "new"
             };
         }
@@ -5754,12 +5892,11 @@
                 return;
             }
             var skipped = skippedIds();
-            var counts = { ended: 0, voted: 0, skipped: 0, ticket: 0 };
+            var counts = { ended: 0, skipped: 0, ticket: 0 };
             var shown = 0;
             var info = cards.map(function(c) {
                 var is = {
                     ended: !c.classList.contains("poll-open"),
-                    voted: !!c.querySelector('.poll-mine, .poll-vote [aria-pressed="true"]'),
                     skipped: skipped.indexOf(c.dataset.id) !== -1,
                     ticket: !!c.querySelector(".poll-from")
                 };
@@ -5777,8 +5914,8 @@
             HIDES.forEach(function(h, i) { paintButton(hideBtns[i], state.hide.indexOf(h[0]) !== -1, h[1] + " " + counts[h[0]]); });
             SORTS.forEach(function(s, i) { paintButton(sortBtns[i], state.sort === s[0], s[1]); });
 
-            // Under the heading (the site rebuilds the panel without it)
-            var head = panel.querySelector(":scope > .panel-h");
+            // Under the site's filter, else the heading (the site rebuilds the panel without it)
+            var head = panel.querySelector(":scope > .poll-filters") || panel.querySelector(":scope > .panel-h");
             var at = head ? head.nextSibling : panel.firstChild;
             if (at !== bar) panel.insertBefore(bar, at);
             var wantNone = shown === 0;
@@ -5899,6 +6036,8 @@
         perfAs("forge", forgeFold);
         perfAs("forge", designGrid);
         perfAs("inventory", levelPercent);
+        perfAs("inventory", unlocksFold);
+        perfAs("inventory", equipmentHide);
         perfAs("polls", pollFilters);
         perfAs("effects", effectToggles);
         perfAs("pin", pinPanel);

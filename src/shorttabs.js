@@ -1,16 +1,25 @@
 // Shorter labels on the flat tab bar: "[ ACHIEVEMENTS 2 ]" shows as "ACHIEVE 2".
 // The site's own text is left alone (it rewrites it for counts); CSS shows data-short.
+// [ TICKETS ]'s coloured stars (.tab-star) stay the site's own elements, shown after the label.
 function shortTabs() {
     var tabs = document.getElementById("tabs");
     if (!tabs) return false;
     var SHORT = [
         ["ACHIEVEMENTS", "ACHIEVE"], ["HALL OF FAME", "FAME"], ["CHANGELOG", "CHANGES"], ["THE DIG", "DIG"],
         ["SPREAD THE WORD", "SHARE"], ["DESIGN A BOSS", "DESIGN"], ["VOTE ON BOSSES", "VOTE"],
-        ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"]
+        ["ANNOUNCEMENTS", "NEWS"], ["CREATE EMOTES", "EMOTES"], ["CHALKBOARD", "CHALK"]
     ];
 
+    function text(btn) {
+        var t = "";
+        btn.childNodes.forEach(function(n) {
+            if (!(n.classList && n.classList.contains("tab-star"))) t += n.textContent || "";
+        });
+        return t;
+    }
+
     function label(btn) {
-        var t = (btn.textContent || "").replace(/^\s*\[\s*|\s*\]\s*$/g, "").replace(/\s+/g, " ");
+        var t = text(btn).replace(/^\s*\[\s*|\s*\]\s*$/g, "").replace(/\s+/g, " ").trim();
         SHORT.forEach(function(pair) {
             if (t.indexOf(pair[0]) === 0) t = pair[1] + t.slice(pair[0].length);
         });

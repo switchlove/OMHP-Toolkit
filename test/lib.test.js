@@ -258,6 +258,7 @@ test("eventLabel", () => {
     assert.equal(lib.eventLabel("second_wind", 2), "2ND WIND");
     assert.equal(lib.eventLabel("second_wind", 3), "3RD WIND");
     assert.equal(lib.eventLabel("second_wind", 4), "4TH WIND");
+    assert.equal(lib.eventLabel("pick"), "PICK THE BOSS");
 });
 
 test("clockDur", () => {

@@ -334,3 +334,150 @@ function levelPercent() {
     var bridge = document.getElementById("omhp-boss-data");
     if (bridge) watcher(function() { applies.forEach(function(f) { f(); }); }).observe(bridge, { attributes: true, attributeFilter: ["data-me"] });
 }
+
+
+// INVENTORY: [-] / [+] on LEVEL UNLOCKS folds the list down to its heading (remembered). The site
+// redraws the panel on every update of your data, so the button goes back on after each redraw
+// and the rows are hidden with a class on the panel, which the redraws leave alone. HELP's
+// pop-up of the same list stays as it is.
+var UNLOCKS_FOLD_KEY = "omhp.layout.unlocksFold";
+
+function unlocksFold() {
+    var panel = document.getElementById("panel-inventory");
+    if (!panel) return;
+    var folded = loadJSON(UNLOCKS_FOLD_KEY, false) === true;
+
+    function apply() {
+        if (panel.classList.contains("omhp-unlocks-folded") !== folded) panel.classList.toggle("omhp-unlocks-folded", folded);
+        var head = panel.querySelector(".unlocks > .unlocks-h");
+        if (!head) return;
+        var b = head.querySelector(".omhp-unlocks-fold");
+        if (!b) {
+            b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn-text omhp-clan-fold omhp-unlocks-fold";
+            b.addEventListener("click", function() {
+                folded = !folded;
+                save(UNLOCKS_FOLD_KEY, folded);
+                apply();
+            });
+            head.insertBefore(b, head.firstChild);
+        }
+        var text = folded ? "[+] " : "[-] ";
+        if (b.textContent !== text) b.textContent = text;
+        // Folded, the title still says what's next: "LEVEL 30 GODLY gear and BOSS UNIQUES <- NEXT (3 levels to go)"
+        var next = panel.querySelector(".unlocks-next");
+        var title = folded ? "show what each level opens" +
+            (next ? ". Next: " + (next.textContent || "").replace(/^\s*\[\s*\]\s*/, "").replace(/\s+/g, " ").trim() : "") : "hide the level unlocks";
+        if (b.title !== title) b.title = title;
+        if (b.getAttribute("aria-expanded") !== String(!folded)) b.setAttribute("aria-expanded", String(!folded));
+    }
+
+    observeBatched(panel, { childList: true, subtree: true }, apply);
+    onSetting(function(key) {
+        if (key !== UNLOCKS_FOLD_KEY) return;
+        folded = loadJSON(UNLOCKS_FOLD_KEY, false) === true;
+        apply();
+    });
+    apply();
+}
+
+
+// INVENTORY: a HIDE row under YOUR EQUIPMENT's RARITY / EFFECT / SORT, to hide any mix of rarities
+// at once (the site's RARITY picks just one to show). Remembered. The hidden rarities go on the
+// panel as data-omhp-own-hide and the stylesheet hides their rows, so a redraw (every update of
+// your data) never shows them for a moment; the row of buttons goes back on after each redraw.
+// Each button counts that rarity's rows in the list as the site's own filters leave it.
+var OWN_HIDE_KEY = "omhp.layout.ownHide";
+
+function equipmentHide() {
+    var panel = document.getElementById("panel-inventory");
+    if (!panel) return;
+    var hide;
+    function load() {
+        var s = loadJSON(OWN_HIDE_KEY, []);
+        hide = Array.isArray(s) ? s.filter(function(r) { return RARITIES.indexOf(r) !== -1; }) : [];
+    }
+    load();
+
+    var bar = document.createElement("div");
+    bar.className = "ticket-filters omhp-own-hides";
+    var lead = document.createElement("span");
+    lead.className = "dim";
+    lead.textContent = "HIDE ";
+    bar.appendChild(lead);
+    var btns = RARITIES.map(function(r) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "inline-btn ticket-filter r-" + r;
+        var name = r.replace(/_/g, " ").toUpperCase();
+        b.title = "hide your " + name + " gear";
+        b.addEventListener("click", function() {
+            var i = hide.indexOf(r);
+            if (i === -1) hide.push(r);
+            else hide.splice(i, 1);
+            save(OWN_HIDE_KEY, hide);
+            apply();
+        });
+        bar.appendChild(b);
+        return { id: r, name: name, el: b };
+    });
+    var tally = document.createElement("span");
+    tally.className = "dim omhp-own-hidden";
+    var none = document.createElement("div");
+    none.className = "dim bag-note omhp-own-none";
+    none.textContent = "> all hidden: turn a HIDE off";
+
+    function rarityOf(row) {
+        var name = row.querySelector(".own-name");
+        var m = name && name.className.match(/(?:^|\s)r-([a-z_]+)/);
+        return m ? m[1] : "";
+    }
+
+    function apply() {
+        var want = hide.join(" ");
+        if ((panel.dataset.omhpOwnHide || "") !== want) {
+            if (want) panel.dataset.omhpOwnHide = want;
+            else delete panel.dataset.omhpOwnHide;
+        }
+        var picks = panel.querySelector(".own-picks"), list = panel.querySelector(".own-list"), head = panel.querySelector(".own-head");
+        if (!picks || !list) return; // not drawn yet ("> connecting...")
+
+        var counts = {}, rows = list.querySelectorAll(":scope > .own-row"), hidden = 0;
+        rows.forEach(function(row) {
+            var r = rarityOf(row);
+            counts[r] = (counts[r] || 0) + 1;
+            if (hide.indexOf(r) !== -1) hidden++;
+        });
+        var any = false;
+        btns.forEach(function(b) {
+            var on = hide.indexOf(b.id) !== -1, n = counts[b.id] || 0;
+            var show = on || n > 0;
+            if (show) any = true;
+            if (b.el.hidden === show) b.el.hidden = !show;
+            var text = (on ? "[x " : "[ ") + b.name + " " + fmt(n) + " ]";
+            if (b.el.textContent !== text) b.el.textContent = text;
+            if (b.el.getAttribute("aria-pressed") !== String(on)) b.el.setAttribute("aria-pressed", String(on));
+        });
+        if (bar.hidden === any) bar.hidden = !any;
+        if (picks.nextSibling !== bar) picks.parentNode.insertBefore(bar, picks.nextSibling);
+
+        // "YOUR EQUIPMENT  12 / 40 · 28 HIDDEN"
+        var text = hidden ? " · " + fmt(hidden) + " HIDDEN" : "";
+        if (tally.textContent !== text) tally.textContent = text;
+        if (head && hidden && tally.parentNode !== head) head.appendChild(tally);
+        else if (!hidden && tally.isConnected) tally.remove();
+
+        var allGone = hidden > 0 && hidden === rows.length;
+        if (allGone && none.nextSibling !== list) list.parentNode.insertBefore(none, list);
+        else if (!allGone && none.isConnected) none.remove();
+    }
+
+    observeBatched(panel, { childList: true, subtree: true }, apply);
+    onSetting(function(key) {
+        if (key !== OWN_HIDE_KEY) return;
+        load();
+        apply();
+    });
+    apply();
+}

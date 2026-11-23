@@ -60,7 +60,9 @@ function paintAccount() {
                     if (!out || !b) return;
                     out.dataset.boss = JSON.stringify({
                         seq: b.seq, name: b.name, hp: b.hp, max: b.max_hp, phase: b.phase,
-                        dmg: b.total_damage, alive: b.status === "alive", event: localEvent(b.event)
+                        dmg: b.total_damage, alive: b.status === "alive", event: localEvent(b.event),
+                        // PICK THE BOSS's modifier on this fight ("x2 HEALTH")
+                        mod: b.boss_mod?.name ?? null
                     });
                 };
                 store.on("boss", publish);
@@ -305,77 +307,24 @@ function paintAccount() {
                 });
             })
             .catch(() => { /* no sounds, nothing else lost */ });
-        // New POLLS, VOTE ON BOSSES ballots and TICKETS light up their tabs. The site only checks
-        // POLLS and VOTE when the page opens (and POLLS on a new boss), and never marks TICKETS.
-        // So every 3 minutes while the page is on screen, POLLS and VOTE are checked again (their
-        // own badges; not while their panel is open, which would redraw it under you), and
-        // TICKETS shows "[ TICKETS 2 ]" like POLLS does: other players' FEATURES whose YES / NO
-        // vote is running and that you haven't voted on, plus their ISSUES filed since you last
-        // had the tab open.
+        // New POLLS and VOTE ON BOSSES ballots light up their tabs. The site only checks them when
+        // the page opens (and POLLS on a new boss), so every 3 minutes while the page is on screen
+        // they're checked again (their own badges; not while their panel is open, which would
+        // redraw it under you). TICKETS lights itself now (its stars, every minute).
         Promise.all([
             import(${JSON.stringify(base + "ui/polls.js" + v)}),
-            import(${JSON.stringify(base + "ui/bossvote.js" + v)}),
-            import(${JSON.stringify(base + "api.js" + v)}),
-            import(${JSON.stringify(base + "store.js" + v)})
+            import(${JSON.stringify(base + "ui/bossvote.js" + v)})
         ])
-            .then(([polls, bossvote, api, store]) => {
-                const SEEN = "omhp.layout.ticketsSeen"; // the newest ticket id you've had on screen
-                const tab = document.querySelector('#tabs [data-tab="tickets"]');
-                let list = [], newest = 0, fresh = 0;
-                // A feature still taking YES / NO votes (as the site's TICKETS panel decides it)
-                const voting = (t) => (t.kind ?? "issue") === "feature" && typeof t.vote_ends_at === "number" &&
-                    !t.vote_result && t.vote_ends_at > store.now() && (t.status === "new" || t.status === "in_progress");
-                const seen = () => {
-                    try { return Number(JSON.parse(localStorage.getItem(SEEN))) || 0; } catch (e) { return 0; }
-                };
-                const markSeen = () => {
-                    try { localStorage.setItem(SEEN, String(newest)); } catch (e) { /* storage blocked */ }
-                };
+            .then(([polls, bossvote]) => {
                 const onScreen = (id) => {
                     const p = document.getElementById(id);
                     return !!p && !p.hidden && !!p.offsetParent;
                 };
-                const paint = () => {
-                    if (!tab) return;
-                    if (newest > seen() && !document.hidden && onScreen("panel-tickets")) markSeen();
-                    if (newest <= seen()) fresh = 0;
-                    // Waiting for your vote: until you vote, or its vote ends
-                    const waiting = list.filter((t) => voting(t) && !t.my_vote && !t.mine).length;
-                    const n = fresh + waiting;
-                    const text = n ? "[ TICKETS " + n + " ]" : "[ TICKETS ]";
-                    if (tab.textContent !== text) tab.textContent = text;
-                    tab.classList.toggle("has-new", n > 0);
-                };
-                let loading = false;
-                const loadTickets = async () => {
-                    if (loading) return;
-                    loading = true;
-                    try {
-                        list = (await api.getTickets())?.tickets ?? [];
-                        newest = list.reduce((n, t) => Math.max(n, Number(t.id) || 0), 0);
-                        if (!seen() && newest) markSeen(); // the first time: no backlog
-                        const s = seen();
-                        fresh = list.filter((t) => Number(t.id) > s && !t.mine && !voting(t)).length;
-                    } catch (e) { /* not logged in, or the site is busy: next time */ }
-                    loading = false;
-                    paint();
-                };
-                // A vote in TICKETS: count again shortly after (the site doesn't say)
-                let again = 0;
-                document.addEventListener("click", (e) => {
-                    const p = document.getElementById("panel-tickets");
-                    if (!p || !(e.target instanceof Node) || !p.contains(e.target)) return;
-                    clearTimeout(again);
-                    again = setTimeout(loadTickets, 1500);
-                });
                 setInterval(() => {
                     if (document.hidden) return;
                     if (!onScreen("panel-polls")) polls.loadPolls(true);
                     if (!onScreen("panel-bossvote")) bossvote.loadBossVotes(true);
-                    loadTickets();
                 }, 180000);
-                setInterval(paint, 3000);
-                setTimeout(loadTickets, 5000);
             })
             .catch(() => {
                 const out = document.getElementById("omhp-boss-data");

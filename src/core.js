@@ -44,9 +44,9 @@ var ACCOUNT_KEY = "omhp.account";
 var ACCOUNT_KEYS = ["omhp.session", "omhp.loot", "omhp.chests", "omhp.bosses", "omhp.bosscur", "omhp.bossgraphs",
     "omhp.records", "omhp.days", "omhp.idle", "omhp.layout.hp", "omhp.layout.dailyNote"];
 // What features that are gone kept: AUCTION WATCH (Season 2 closed the auction house) and the
-// TICKETS / ACHIEVEMENTS buttons (the game has its own now). Dropped at start-up.
+// TICKETS / ACHIEVEMENTS buttons and the TICKETS tab count (the game has its own now). Dropped at start-up.
 var RETIRED_KEYS = ["omhp.layout.watches", "omhp.layout.watchSeen", "omhp.layout.watchHits", "omhp.layout.undercutSeen",
-    "omhp.layout.ticketsHideVoted", "omhp.layout.ticketsHideClosed", "omhp.layout.achievementSort"];
+    "omhp.layout.ticketsHideVoted", "omhp.layout.ticketsHideClosed", "omhp.layout.achievementSort", "omhp.layout.ticketsSeen"];
 try {
     RETIRED_KEYS.forEach(function(k) { localStorage.removeItem(k); });
 } catch (e) { /* storage blocked */ }

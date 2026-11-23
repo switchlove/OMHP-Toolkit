@@ -668,7 +668,8 @@ function bossGraph() {
             events = [];
         }
         if (b.max) maxHp = b.max;
-        if (b.event && b.event.kind && b.event.kind !== "fog") markEvent(b.event.kind);
+        // Not on a dead boss (PICK THE BOSS's vote is about the next one)
+        if (b.alive !== false && b.event && b.event.kind && b.event.kind !== "fog") markEvent(b.event.kind);
         var me = myTotals();
         points.push([Date.now(), b.hp, b.phase || null, numberIn(document.getElementById("st-online")), me ? me.dmg : null]);
         // Long fights: thin out the older half instead of dropping the start

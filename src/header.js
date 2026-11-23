@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OMHP Toolkit
 // @namespace    https://github.com/switchlove/OMHP-Toolkit
-// @version      0.38
+// @version      0.39
 // @description  Three-column layout with pinned and pop-out panels, a boss HP graph with kill ETA and replay, session, loot and boss logs, alerts, chat filters, saved layouts and colour themes for One Million HP
 // @author       switchlove
 // @license      MIT
@@ -28,15 +28,18 @@
 //     your highlight colour or the site's ping colour, HELP the only dropdown). [PIN] keeps the open panel above the others, up to three stacked, each
 //     with its own resize line, [UNPIN] and [_] to fold it down to its name; a folded one
 //     lights up when something's new in it ("· 2 NEW" tickets, polls or ballots, "· UPDATED").
-//     [POP OUT] opens it in a floating window. New POLLS, VOTE ON BOSSES ballots and TICKETS
-//     light up their tabs (checked every 3 minutes; TICKETS counts features waiting for your
-//     vote and issues filed since you last opened it). POLLS gets HIDE (ENDED, VOTED, SKIPPED,
-//     FROM TICKETS) and SORT (NEWEST, ENDING SOON, MOST VOTES) rows like TICKETS has.
+//     [POP OUT] opens it in a floating window. New POLLS and VOTE ON BOSSES ballots light up
+//     their tabs (checked every 3 minutes); TICKETS keeps the site's coloured stars. POLLS gets
+//     HIDE (ENDED, SKIPPED, FROM TICKETS) and SORT (NEWEST, ENDING SOON, MOST VOTES) rows under
+//     the site's own [ NOT VOTED ] / [ VOTED ] filter. CHALKBOARD's [ FULL SIZE ] covers the
+//     page even with the column pinned.
 //     BAG's loot-box cards are smaller so more fit across, and in the same order as
 //     SHOP. RANKS (30s) and HISTORY (60s) refresh while they're on screen. CLAN's
 //     MEMBERS list, and the BOSS FORGE's YOUR SUBMISSIONS and YOUR BOSSES, fold away with
 //     [-] / [+] on their heading; a LINES slider by the forge's [ GRID ] sets how strong its
 //     grid lines are. PROFILE's and INVENTORY's LEVEL rows add how far through the level you are (54.6%).
+//     INVENTORY's LEVEL UNLOCKS folds away with [-] / [+], and YOUR EQUIPMENT gets a HIDE row
+//     to hide any mix of rarities (both remembered).
 //   - Floating windows can be dragged, resized, minimised and faded, and you can have
 //     several open at once. They snap to the screen's edges and to each other (hold
 //     Shift to place one freely); [TOOLKIT] > LAYOUT > TILE lays them out in a grid.
@@ -55,7 +58,8 @@
 //     estimated kill, and [VS LAST] lays the previous boss's fight over this one.
 //   - While a world event runs, its name and time left lead the ETA line and the title.
 //   - BOSSES: every boss you've seen, with how long it lasted, your damage and share,
-//     peak players online and HP healed; [GRAPH] opens its HP graph in a window.
+//     peak players online, HP healed and its PICK THE BOSS modifier; [GRAPH] opens its HP
+//     graph in a window. Pop-out windows drop under PICK THE BOSS's vote screen.
 //   - During the FOG event it uses the site's real data and never records the fake HP.
 //
 // FIGHT

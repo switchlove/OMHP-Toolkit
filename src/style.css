@@ -17,6 +17,9 @@
         display: flex; flex-direction: column;
     }
     #app .col-side > #tabs { flex: none; z-index: 5; } /* dropdowns stay above the panel */
+    /* CHALKBOARD's [ FULL SIZE ] lifts the board over the page, but a pinned column keeps it in
+       its own layer: lift the column too while it's big (pop-out windows the same, further down) */
+    html.chalk-open #app .col-side:has(#panel-chalkboard.chalk-big) { z-index: 70; }
     #app .col-side > .panel {
         flex: 1 1 auto; min-height: 0;
         overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
@@ -93,6 +96,8 @@ html.omhp-flattabs #tabs .tab-menu button { padding: 2px 3px; font-size: 11px; l
 /* Short labels (see shortTabs): hide the site's text, show data-short instead */
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] { font-size: 0; }
 html.omhp-flattabs #tabs .tab-menu [role=tab][data-short]::before { content: attr(data-short); font-size: 11px; }
+/* ...but [ TICKETS ]'s stars are the site's own, each in its ticket type's colour: "TICKETS *2 *" */
+html.omhp-flattabs #tabs .tab-menu [role=tab][data-short] .tab-star { font-size: 11px; margin-left: .4em; }
 /* News in a tab (new polls, tickets, ballots, changelog, achievements to claim) in the highlight
    colour, or the ping colour picked in GAME > SETTINGS (its default grey would light it white):
    the site's pings sit on the menu headings, which the flat bar hides */
@@ -366,6 +371,8 @@ html.omhp-stats-theme #omhp-tracker .rar-unique { color: #bffcff; text-shadow: 0
 /* POLLS: HIDE and SORT rows (see pollFilters), in the site's TICKETS look; the layout here is
    the fallback if its ticket classes change */
 .omhp-poll-filters { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 10px 0; font-size: 12px; }
+/* Close under the site's own [ ALL ] [ NOT VOTED ] [ VOTED ], as one block */
+#panel-polls .poll-filters + .omhp-poll-filters { margin-top: -6px; }
 /* SORT and HIDE rows from the left, one under the other, in TICKETS and POLLS alike (the site
    pushes TICKETS' SORT to the right edge) */
 .ticket-filters .ticket-sorts { margin-left: 0; flex-basis: 100%; }
@@ -382,6 +389,18 @@ html.omhp-grid-set .design-canvas, html.omhp-grid-set .design-canvas.bright-grid
 .omhp-grid-pick input { width: 80px; height: 12px; accent-color: var(--amber); cursor: pointer; }
 /* PROFILE and INVENTORY: how far through this level (see levelPercent) */
 .omhp-lvl-pct { color: var(--amber); }
+/* INVENTORY: LEVEL UNLOCKS folded down to its heading (see unlocksFold) */
+#panel-inventory.omhp-unlocks-folded .unlocks > :not(.unlocks-h) { display: none; }
+#panel-inventory.omhp-unlocks-folded .unlocks-h { margin-bottom: 0; }
+/* INVENTORY: YOUR EQUIPMENT's HIDE row, and the rarities it hides (see equipmentHide) */
+.omhp-own-hides { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 4px 0; font-size: 12px; }
+.omhp-own-hides[hidden], .omhp-own-hides [hidden] { display: none; }
+#panel-inventory[data-omhp-own-hide~="common"] .own-list > .own-row:has(.own-name.r-common),
+#panel-inventory[data-omhp-own-hide~="rare"] .own-list > .own-row:has(.own-name.r-rare),
+#panel-inventory[data-omhp-own-hide~="epic"] .own-list > .own-row:has(.own-name.r-epic),
+#panel-inventory[data-omhp-own-hide~="legendary"] .own-list > .own-row:has(.own-name.r-legendary),
+#panel-inventory[data-omhp-own-hide~="godly"] .own-list > .own-row:has(.own-name.r-godly),
+#panel-inventory[data-omhp-own-hide~="boss_unique"] .own-list > .own-row:has(.own-name.r-boss_unique) { display: none; }
 
 /* EFFECTS ([TOOLKIT], see effectToggles): the background mist's motion, colour and strength,
    no scanlines, no floating hit numbers. A STILL mist keeps its last frame with .omhp-mist-held */
@@ -416,6 +435,10 @@ html.omhp-no-numbers #popups .pop.seg { display: none; }
     min-width: 300px; min-height: 200px; resize: both; overflow: hidden;
     background: var(--bg); border: 1px solid var(--dim); box-shadow: 0 10px 40px rgba(0,0,0,.7);
 }
+html.chalk-open .omhp-float:has(#panel-chalkboard.chalk-big) { z-index: 70; }
+/* PICK THE BOSS: the vote screen (z-index 45) covers the page for 20 seconds; windows go under it
+   so they can't sit over the two choices */
+body.picking .omhp-float { z-index: 44; }
 .omhp-float-bar {
     flex: none; display: flex; justify-content: space-between; align-items: center;
     padding: 4px 8px; background: var(--bg-2); border-bottom: 1px solid var(--faint);

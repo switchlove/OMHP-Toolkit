@@ -294,7 +294,8 @@ function unpackPoints(packed) {
 }
 
 // World event kinds as short names for the title and graph: "laststand" -> "LAST STAND"
-var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND" };
+// pick: PICK THE BOSS, the vote on a dead boss for the next one
+var EVENT_NAMES = { second_wind: "2ND WIND", laststand: "LAST STAND", pick: "PICK THE BOSS" };
 
 // round: SECOND WIND's round (3 and 4 are THIRD and FOURTH WIND)
 function eventLabel(kind, round) {

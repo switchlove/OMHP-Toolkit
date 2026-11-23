@@ -1,6 +1,7 @@
-// POLLS: HIDE and SORT rows like TICKETS' own. The site has neither, and redraws the whole
-// panel on every load, vote and its 15s refresh, so the same bar goes back under the heading
-// after every redraw, hidden polls get a class, and the cards are moved into the chosen order.
+// POLLS: HIDE and SORT rows like TICKETS' own, under the site's [ ALL ] [ NOT VOTED ] [ VOTED ]
+// filter (which covers voted or not). The site redraws the whole panel on every load, vote and
+// its 15s refresh, so the same bar goes back under its filter after every redraw, hidden polls
+// get a class, and the cards are moved into the chosen order.
 // Everything is read from the cards the site draws: a poll's vote count only when the site
 // shows it (you voted, skipped, or it ended), so MOST VOTES never gives away an open poll's.
 var POLL_FILTER_KEY = "omhp.layout.pollFilters";
@@ -8,7 +9,7 @@ var POLL_FILTER_KEY = "omhp.layout.pollFilters";
 function pollFilters() {
     var panel = document.getElementById("panel-polls");
     if (!panel) return false;
-    var HIDES = [["ended", "ENDED", "polls that have passed or failed"], ["voted", "VOTED", "polls you've voted on"],
+    var HIDES = [["ended", "ENDED", "polls that have passed or failed"],
         ["skipped", "SKIPPED", "polls you skipped"], ["ticket", "FROM TICKETS", "polls that came from a player's ticket"]];
     var SORTS = [["new", "NEWEST", "newest first"], ["ending", "ENDING SOON", "open polls ending soonest first, then ended ones"],
         ["votes", "MOST VOTES", "most votes first (open polls you haven't voted on, whose counts are hidden, go last)"]];
@@ -17,7 +18,8 @@ function pollFilters() {
     function load() {
         var s = loadJSON(POLL_FILTER_KEY, null);
         state = {
-            hide: s && Array.isArray(s.hide) ? s.hide : ["ended"],
+            // VOTED was one until the site's own filter (2026-11-19)
+            hide: s && Array.isArray(s.hide) ? s.hide.filter(function(k) { return HIDES.some(function(h) { return h[0] === k; }); }) : ["ended"],
             sort: s && SORTS.some(function(x) { return x[0] === s.sort; }) ? s.sort : "new"
         };
     }
@@ -92,12 +94,11 @@ function pollFilters() {
             return;
         }
         var skipped = skippedIds();
-        var counts = { ended: 0, voted: 0, skipped: 0, ticket: 0 };
+        var counts = { ended: 0, skipped: 0, ticket: 0 };
         var shown = 0;
         var info = cards.map(function(c) {
             var is = {
                 ended: !c.classList.contains("poll-open"),
-                voted: !!c.querySelector('.poll-mine, .poll-vote [aria-pressed="true"]'),
                 skipped: skipped.indexOf(c.dataset.id) !== -1,
                 ticket: !!c.querySelector(".poll-from")
             };
@@ -115,8 +116,8 @@ function pollFilters() {
         HIDES.forEach(function(h, i) { paintButton(hideBtns[i], state.hide.indexOf(h[0]) !== -1, h[1] + " " + counts[h[0]]); });
         SORTS.forEach(function(s, i) { paintButton(sortBtns[i], state.sort === s[0], s[1]); });
 
-        // Under the heading (the site rebuilds the panel without it)
-        var head = panel.querySelector(":scope > .panel-h");
+        // Under the site's filter, else the heading (the site rebuilds the panel without it)
+        var head = panel.querySelector(":scope > .poll-filters") || panel.querySelector(":scope > .panel-h");
         var at = head ? head.nextSibling : panel.firstChild;
         if (at !== bar) panel.insertBefore(bar, at);
         var wantNone = shown === 0;
